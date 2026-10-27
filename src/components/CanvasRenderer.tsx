@@ -2045,13 +2045,16 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
                     fontWeight: 600,
                     lineHeight: '1.4',
                     gap: '8px',
-                    overflow: 'visible',
+                    whiteSpace: 'nowrap',
+                    wordBreak: 'keep-all',
+                    flexWrap: 'nowrap',
+                    overflow: 'hidden',
                   }}
                 >
                   <EditableText
                     tagName="span"
                     value={b.orgNameLeft}
-                    style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4', wordBreak: 'keep-all' }}
+                    style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4', wordBreak: 'keep-all', display: 'inline-block' }}
                     onChange={(orgNameLeft) =>
                       updateRootBlock(b.id, (prev) => ({
                         ...prev,
@@ -2062,7 +2065,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
                   <EditableText
                     tagName="span"
                     value={b.issueMetaRight}
-                    style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4', wordBreak: 'keep-all', textAlign: 'right' }}
+                    style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4', wordBreak: 'keep-all', textAlign: 'right', display: 'inline-block' }}
                     onChange={(issueMetaRight) =>
                       updateRootBlock(b.id, (prev) => ({
                         ...prev,

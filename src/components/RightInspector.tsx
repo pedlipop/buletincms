@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlignCenter,
   AlignJustify,
@@ -14,6 +14,7 @@ import {
   Italic,
   Layers,
   LayoutGrid,
+  Minus,
   Palette,
   Plus,
   RotateCcw,
@@ -172,6 +173,33 @@ export const RightInspector: React.FC = () => {
   const cornerStickerInputRef = useRef<HTMLInputElement>(null);
   const fontReaderInputRef = useRef<HTMLInputElement>(null);
   const [isTextToolOpen, setIsTextToolOpen] = useState(false);
+  const [manualFontSize, setManualFontSize] = useState<number>(14);
+  const [customTextColor, setCustomTextColor] = useState<string>('#2563eb');
+  const [customHiliteColor, setCustomHiliteColor] = useState<string>('#fef08a');
+  const lastActiveEditableRef = useRef<HTMLElement | null>(null);
+  const lastRangeRef = useRef<Range | null>(null);
+
+  useEffect(() => {
+    const handleSelection = () => {
+      const sel = window.getSelection();
+      const active = document.activeElement as HTMLElement | null;
+      if (active && active.isContentEditable) {
+        lastActiveEditableRef.current = active;
+      }
+      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        const range = sel.getRangeAt(0);
+        const container = range.commonAncestorContainer;
+        const el = (container.nodeType === 1 ? container : container.parentElement) as HTMLElement | null;
+        if (el && el.closest('[contenteditable="true"]')) {
+          lastRangeRef.current = range.cloneRange();
+          lastActiveEditableRef.current = el.closest('[contenteditable="true"]') as HTMLElement;
+        }
+      }
+    };
+    document.addEventListener('selectionchange', handleSelection);
+    return () => document.removeEventListener('selectionchange', handleSelection);
+  }, []);
+
   const [imageSlotTab, setImageSlotTab] = useState<'size' | 'frame' | 'crop'>('size');
   const [isFrameDetailsOpen, setIsFrameDetailsOpen] = useState(false);
 
@@ -362,21 +390,65 @@ export const RightInspector: React.FC = () => {
     e.target.value = '';
   };
 
+  const restoreTextSelection = (): HTMLElement | null => {
+    const el = lastActiveEditableRef.current;
+    if (!el || !document.body.contains(el)) return null;
+    el.focus();
+    const sel = window.getSelection();
+    if (sel) {
+      if (
+        lastRangeRef.current &&
+        el.contains(lastRangeRef.current.commonAncestorContainer)
+      ) {
+        sel.removeAllRanges();
+        sel.addRange(lastRangeRef.current);
+      } else {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }
+    return el;
+  };
+
   const execCmd = (command: string, value: string = '') => {
+    restoreTextSelection();
+    document.execCommand('styleWithCSS', false, 'true');
     document.execCommand(command, false, value);
+    const activeEl =
+      lastActiveEditableRef.current ||
+      (document.activeElement as HTMLElement | null);
+    if (activeEl && activeEl.isContentEditable) {
+      activeEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
   };
 
   const formatFontSize = (px: number) => {
+    const clamped = Math.max(8, Math.min(96, Math.round(px)));
+    setManualFontSize(clamped);
+
+    const activeEl =
+      restoreTextSelection() || (document.activeElement as HTMLElement | null);
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-      document.execCommand('fontSize', false, '3');
-      return;
+    if (!sel || sel.rangeCount === 0) return;
+
+    const isEditable = activeEl && activeEl.isContentEditable;
+    document.execCommand('styleWithCSS', false, 'false');
+    document.execCommand('fontSize', false, '7');
+
+    const container = isEditable ? activeEl : document.body;
+    const fonts = container.querySelectorAll('font[size="7"]');
+    fonts.forEach((fontEl) => {
+      const span = document.createElement('span');
+      span.style.fontSize = `${clamped}px`;
+      span.innerHTML = fontEl.innerHTML;
+      fontEl.parentNode?.replaceChild(span, fontEl);
+    });
+
+    if (isEditable) {
+      activeEl.dispatchEvent(new Event('input', { bubbles: true }));
     }
-    const range = sel.getRangeAt(0);
-    const span = document.createElement('span');
-    span.style.fontSize = `${px}px`;
-    span.appendChild(range.extractContents());
-    range.insertNode(span);
   };
 
   return (
@@ -413,30 +485,31 @@ export const RightInspector: React.FC = () => {
         {/* TEXT ADJUSTMENT TOOL & FONT READER (Hidden when Photo Selected) */}
         {/* ========================================================= */}
         {!selectedImageSlot && (
-          <div className="bg-zinc-800/80 border border-zinc-700/80 rounded-lg p-3 space-y-2.5">
-            <div className="flex items-center justify-between border-b border-zinc-700/60 pb-2">
+          <div className="bg-zinc-800/90 border border-zinc-700/80 rounded-xl p-3.5 space-y-3.5 shadow-md">
+            {/* Header: Foldable Title + Import Font */}
+            <div className="flex items-center justify-between border-b border-zinc-700/70 pb-2.5">
               <button
                 type="button"
                 onClick={() => setIsTextToolOpen(!isTextToolOpen)}
-                className="flex items-center gap-1.5 text-xs font-bold text-white hover:text-amber-300 transition-colors"
+                className="flex items-center gap-2 text-xs font-bold text-white hover:text-amber-300 transition-colors"
               >
-                <Type size={14} className="text-amber-400" />
-                <span>{t('文本排版与字库', 'Text & Fonts')}</span>
+                <div className="w-5 h-5 rounded bg-amber-500/20 text-amber-400 flex items-center justify-center font-serif text-xs font-bold">
+                  T
+                </div>
+                <span>{t('文本排版调节与字库', 'Text & Typography')}</span>
                 <span className="text-[10px] text-zinc-500 font-normal">
                   {isTextToolOpen ? '▾' : '▸'}
                 </span>
               </button>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => fontReaderInputRef.current?.click()}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-700/80 hover:bg-zinc-700 text-amber-300 text-[10px] font-semibold border border-zinc-600 transition-colors"
-                  title={t('导入本地字体文件 (.ttf / .otf / .woff)', 'Import Font File (.ttf/.otf/.woff)')}
-                >
-                  <Upload size={11} />
-                  <span>{t('导入字体', 'Import Font')}</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => fontReaderInputRef.current?.click()}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-700/80 hover:bg-zinc-700 text-amber-300 text-[11px] font-semibold border border-zinc-600 shadow-sm transition-all hover:scale-105 active:scale-95"
+                title={t('导入本地字体文件 (.ttf / .otf / .woff)', 'Import Font File (.ttf/.otf/.woff)')}
+              >
+                <Upload size={12} />
+                <span>{t('导入字体', 'Import Font')}</span>
+              </button>
             </div>
 
             <input
@@ -448,19 +521,19 @@ export const RightInspector: React.FC = () => {
             />
 
             {isTextToolOpen && (
-              <div className="space-y-2.5 pt-0.5">
-                {/* 1. Font Family Selector */}
-                <div>
-                  <div className="flex items-center justify-between mb-1 text-[10px] text-zinc-400 font-semibold">
+              <div className="space-y-3.5 pt-0.5">
+                {/* 1. Global Font Family */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
                     <span>{t('全局排版字体', 'Font Family')}</span>
-                    <span className="font-mono text-zinc-500 truncate max-w-[120px]">
-                      {doc.fontFamily || '系统默认'}
+                    <span className="font-mono text-[10px] text-zinc-500 truncate max-w-[130px]">
+                      {doc.fontFamily || t('系统默认', 'Default')}
                     </span>
                   </div>
                   <select
                     value={doc.fontFamily || ''}
                     onChange={(e) => updateDocumentMeta({ fontFamily: e.target.value })}
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-amber-400 cursor-pointer"
+                    className="w-full bg-zinc-950 border border-zinc-700 hover:border-zinc-500 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-amber-400 transition-colors cursor-pointer"
                   >
                     <option value="">{t('系统默认黑体 (Inter / 苹方)', 'System Default (Inter)')}</option>
                     <optgroup label={t('精选字体预设', 'Curated Web Fonts')}>
@@ -482,147 +555,293 @@ export const RightInspector: React.FC = () => {
                   </select>
                 </div>
 
-                {/* 2. Compact Style & Alignment Toolbar */}
-                <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-800 rounded p-1">
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      execCmd('bold');
-                    }}
-                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-xs"
-                    title={t('加粗 (Bold)', 'Bold')}
-                  >
-                    <Bold size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      execCmd('italic');
-                    }}
-                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center text-xs"
-                    title={t('斜体 (Italic)', 'Italic')}
-                  >
-                    <Italic size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      execCmd('underline');
-                    }}
-                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center text-xs"
-                    title={t('下划线 (Underline)', 'Underline')}
-                  >
-                    <Underline size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      execCmd('strikeThrough');
-                    }}
-                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center text-xs"
-                    title={t('删除线', 'Strikethrough')}
-                  >
-                    <Strikethrough size={12} />
-                  </button>
+                {/* 2. Style & Alignment Toolbar */}
+                <div className="space-y-1">
+                  <div className="text-[11px] text-zinc-400 font-medium">
+                    {t('快捷文字样式与对齐', 'Style & Alignment')}
+                  </div>
+                  <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-800 rounded-lg p-1">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        execCmd('bold');
+                      }}
+                      className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-xs transition-colors"
+                      title={t('加粗 (Bold)', 'Bold')}
+                    >
+                      <Bold size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        execCmd('italic');
+                      }}
+                      className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
+                      title={t('斜体 (Italic)', 'Italic')}
+                    >
+                      <Italic size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        execCmd('underline');
+                      }}
+                      className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
+                      title={t('下划线 (Underline)', 'Underline')}
+                    >
+                      <Underline size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        execCmd('strikeThrough');
+                      }}
+                      className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
+                      title={t('删除线', 'Strikethrough')}
+                    >
+                      <Strikethrough size={13} />
+                    </button>
 
-                  <div className="h-4 w-px bg-zinc-800 mx-0.5" />
+                    <div className="h-5 w-px bg-zinc-800 mx-0.5" />
 
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      execCmd('justifyLeft');
-                    }}
-                    className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white"
-                    title={t('左对齐', 'Align Left')}
-                  >
-                    <AlignLeft size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      execCmd('justifyCenter');
-                    }}
-                    className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white"
-                    title={t('居中对齐', 'Align Center')}
-                  >
-                    <AlignCenter size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      execCmd('justifyRight');
-                    }}
-                    className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white"
-                    title={t('右对齐', 'Align Right')}
-                  >
-                    <AlignRight size={12} />
-                  </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        execCmd('justifyLeft');
+                      }}
+                      className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                      title={t('左对齐', 'Align Left')}
+                    >
+                      <AlignLeft size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        execCmd('justifyCenter');
+                      }}
+                      className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                      title={t('居中对齐', 'Align Center')}
+                    >
+                      <AlignCenter size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        execCmd('justifyRight');
+                      }}
+                      className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                      title={t('右对齐', 'Align Right')}
+                    >
+                      <AlignRight size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        execCmd('justifyFull');
+                      }}
+                      className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                      title={t('两端对齐', 'Justify')}
+                    >
+                      <AlignJustify size={13} />
+                    </button>
+                  </div>
                 </div>
 
-                {/* 3. Unified Font Size & Quick Colors */}
-                <div className="flex items-center justify-between gap-2 bg-zinc-950 border border-zinc-800 rounded p-1.5 text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-400 font-semibold">{t('字号', 'Size')}:</span>
-                    <select
-                      onChange={(e) => formatFontSize(Number(e.target.value))}
-                      className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-[11px] rounded px-1.5 py-0.5 font-mono outline-none cursor-pointer"
-                      defaultValue={14}
+                {/* 3. Manual Font Size Setting & Quick Presets */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+                    <span>{t('选区字号精确调节', 'Font Size (Manual & Quick)')}</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">px</span>
+                  </div>
+
+                  {/* Stepper + Manual Input */}
+                  <div className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-lg p-1.5">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        const next = Math.max(8, manualFontSize - 1);
+                        formatFontSize(next);
+                      }}
+                      className="w-7 h-7 rounded bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
+                      title={t('字号减小 (-1px)', 'Decrease Size (-1px)')}
                     >
-                      {[12, 14, 16, 18, 20, 24, 28, 32].map((s) => (
-                        <option key={s} value={s}>
-                          {s}px
-                        </option>
-                      ))}
-                    </select>
+                      <Minus size={13} />
+                    </button>
+                    <div className="flex-1 flex items-center justify-center gap-1">
+                      <input
+                        type="number"
+                        min={8}
+                        max={96}
+                        value={manualFontSize}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setManualFontSize(val);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            formatFontSize(manualFontSize);
+                          }
+                        }}
+                        onBlur={() => {
+                          formatFontSize(manualFontSize);
+                        }}
+                        className="w-14 h-7 text-center font-mono font-bold bg-zinc-900 border border-zinc-700 rounded text-amber-300 focus:border-amber-400 outline-none text-xs"
+                        title={t('输入任意字号数值，回车即时生效', 'Type exact size & press Enter')}
+                      />
+                      <span className="text-[10px] text-zinc-500 font-mono">px</span>
+                    </div>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        const next = Math.min(96, manualFontSize + 1);
+                        formatFontSize(next);
+                      }}
+                      className="w-7 h-7 rounded bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
+                      title={t('字号增大 (+1px)', 'Increase Size (+1px)')}
+                    >
+                      <Plus size={13} />
+                    </button>
                   </div>
 
-                  <div className="h-4 w-px bg-zinc-800" />
-
-                  <div className="flex items-center gap-1">
-                    {['#18181b', '#ffffff', '#2563eb', '#dc2626'].map((c) => (
+                  {/* Quick Preset Chips */}
+                  <div className="grid grid-cols-8 gap-1">
+                    {[12, 14, 16, 18, 20, 24, 28, 32].map((s) => (
                       <button
-                        key={c}
+                        key={s}
                         type="button"
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          execCmd('foreColor', c);
+                          formatFontSize(s);
                         }}
-                        style={{ backgroundColor: c }}
-                        className="w-3.5 h-3.5 rounded-full border border-zinc-700 hover:scale-110 transition-transform cursor-pointer"
-                        title={`Color: ${c}`}
-                      />
+                        className={`h-6 rounded text-[11px] font-mono font-semibold transition-all cursor-pointer ${
+                          manualFontSize === s
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-400/60 shadow-sm'
+                            : 'bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800/80'
+                        }`}
+                      >
+                        {s}
+                      </button>
                     ))}
-                    <input
-                      type="color"
-                      onChange={(e) => execCmd('foreColor', e.target.value)}
-                      className="w-4 h-4 rounded-full border-0 bg-transparent cursor-pointer"
-                      title={t('自定义颜色', 'Custom Color')}
-                    />
+                  </div>
+                </div>
+
+                {/* 4. Text Color - Large Swatches + Custom Picker */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+                    <span>{t('文字颜色', 'Text Color')}</span>
+                    <span className="text-[10px] text-zinc-500">
+                      {t('选中文字后点击', 'Select text to apply')}
+                    </span>
                   </div>
 
-                  <div className="h-4 w-px bg-zinc-800" />
-
-                  <div className="flex items-center gap-1">
-                    {['#fef08a', '#bbf7d0', '#bae6fd'].map((hc) => (
+                  <div className="flex items-center flex-wrap gap-2 bg-zinc-950 border border-zinc-800 rounded-lg p-2">
+                    {[
+                      { color: '#18181b', name: 'Black' },
+                      { color: '#64748b', name: 'Slate' },
+                      { color: '#ffffff', name: 'White' },
+                      { color: '#2563eb', name: 'Blue' },
+                      { color: '#0284c7', name: 'Cyan' },
+                      { color: '#16a34a', name: 'Green' },
+                      { color: '#ea580c', name: 'Orange' },
+                      { color: '#dc2626', name: 'Red' },
+                      { color: '#7c3aed', name: 'Purple' },
+                    ].map((c) => (
                       <button
-                        key={hc}
+                        key={c.color}
                         type="button"
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          execCmd('hiliteColor', hc);
+                          execCmd('foreColor', c.color);
                         }}
-                        style={{ backgroundColor: hc }}
-                        className="w-3 h-3 rounded-sm border border-zinc-700 hover:scale-110 transition-transform cursor-pointer"
-                        title={`Highlight: ${hc}`}
+                        style={{ backgroundColor: c.color }}
+                        className="w-6 h-6 rounded-full border border-zinc-600 hover:border-white hover:scale-110 active:scale-95 transition-all shadow-sm cursor-pointer relative"
+                        title={`${c.name}: ${c.color}`}
                       />
                     ))}
+
+                    {/* Custom Color Trigger */}
+                    <label
+                      className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-700 hover:border-amber-400 cursor-pointer transition-colors"
+                      title={t('自选任意颜色', 'Custom Color Picker')}
+                    >
+                      <input
+                        type="color"
+                        value={customTextColor}
+                        onChange={(e) => {
+                          setCustomTextColor(e.target.value);
+                          execCmd('foreColor', e.target.value);
+                        }}
+                        className="w-4 h-4 rounded-full border-0 bg-transparent cursor-pointer p-0"
+                      />
+                      <span className="text-[10px] text-zinc-300 font-medium">{t('自选', 'Custom')}</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* 5. Highlight Background */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+                    <span>{t('荧光高亮背景', 'Highlight Background')}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-lg p-2">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        execCmd('hiliteColor', 'transparent');
+                      }}
+                      className="h-6 px-2 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700 text-[10px] font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                      title={t('清除高亮背景', 'Clear Highlight')}
+                    >
+                      <span>✕</span>
+                      <span>{t('清除', 'Clear')}</span>
+                    </button>
+
+                    {[
+                      { color: '#fef08a', name: 'Yellow' },
+                      { color: '#bbf7d0', name: 'Mint' },
+                      { color: '#bae6fd', name: 'Sky' },
+                      { color: '#fecdd3', name: 'Rose' },
+                      { color: '#e9d5ff', name: 'Lavender' },
+                    ].map((hc) => (
+                      <button
+                        key={hc.color}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          execCmd('hiliteColor', hc.color);
+                        }}
+                        style={{ backgroundColor: hc.color }}
+                        className="w-6 h-6 rounded-md border border-zinc-600 hover:border-white hover:scale-110 active:scale-95 transition-all shadow-sm cursor-pointer"
+                        title={`Highlight: ${hc.name}`}
+                      />
+                    ))}
+
+                    <label
+                      className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-700 hover:border-amber-400 cursor-pointer transition-colors"
+                      title={t('自定义高亮色', 'Custom Highlight')}
+                    >
+                      <input
+                        type="color"
+                        value={customHiliteColor}
+                        onChange={(e) => {
+                          setCustomHiliteColor(e.target.value);
+                          execCmd('hiliteColor', e.target.value);
+                        }}
+                        className="w-4 h-4 rounded border-0 bg-transparent cursor-pointer p-0"
+                      />
+                    </label>
                   </div>
                 </div>
               </div>

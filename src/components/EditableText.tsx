@@ -320,11 +320,11 @@ export const EditableText: React.FC<EditableTextProps> = ({
     return (
       <Tag
         style={{
+          lineHeight: style?.lineHeight || '1.4',
+          ...style,
           whiteSpace: isNowrap ? 'nowrap' : (style?.whiteSpace || 'pre-wrap'),
           wordBreak: isNowrap ? 'keep-all' : (style?.wordBreak || 'break-word'),
           overflowWrap: isNowrap ? 'normal' : (style?.overflowWrap || 'break-word'),
-          lineHeight: style?.lineHeight || '1.4',
-          ...style,
         }}
         className={className}
         dangerouslySetInnerHTML={{ __html: displayHtml }}
@@ -392,15 +392,15 @@ export const EditableText: React.FC<EditableTextProps> = ({
           e.stopPropagation();
         }}
         style={{
-          whiteSpace: isNowrap ? 'nowrap' : 'pre-wrap',
-          wordBreak: isNowrap ? 'keep-all' : 'break-word',
-          overflowWrap: isNowrap ? 'normal' : 'break-word',
           lineHeight: '1.4',
           cursor: 'text',
           outline: isFocused ? '1.5px dashed rgba(37, 99, 235, 0.65)' : undefined,
           outlineOffset: '2px',
           borderRadius: isFocused ? '2px' : undefined,
           ...style,
+          whiteSpace: isNowrap ? 'nowrap' : (style?.whiteSpace || 'pre-wrap'),
+          wordBreak: isNowrap ? 'keep-all' : (style?.wordBreak || 'break-word'),
+          overflowWrap: isNowrap ? 'normal' : (style?.overflowWrap || 'break-word'),
         }}
         className={className}
       />
