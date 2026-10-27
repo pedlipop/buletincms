@@ -1,4 +1,4 @@
-# 📰 TheBulletin CMS (园区简报排版系统)
+# 📰 TheBulletin CMS (公司月刊排版系统)
 
 > A modern, high-performance visual CMS and newsletter designer tailored for enterprise and industrial park editorial teams. Built with React, TypeScript, Tailwind CSS, Vite, and Express.
 
