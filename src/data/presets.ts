@@ -430,7 +430,7 @@ export const createSectionContainer = (
   bordered: true,
   bgImage: createImageSlot('free', 'CONTAINER BG ASSET (可选背景图)'),
   children:
-    children.length > 0 ? children : [createContentBlock('dated_event_block')],
+    children.length > 0 ? children : [createContentBlock('simple_text_block')],
 });
 
 export const createBlankContainer = (
@@ -460,7 +460,7 @@ export const createMastheadBlock = (): MastheadBlock => ({
   showHeroOverlay: true,
   heroTitleEn: 'INDUSTRIAL BASE MONTHLY BULLETIN',
   heroTitleMain: '莫罗瓦利产业基地',
-  heroImage: createImageSlot('16:9', '莫罗瓦利产业基地全景', '/demo/hero_industrial_park.jpg'),
+  heroImage: createImageSlot('16:9', '产业基地大图', null),
   showSubBanner: true,
   subBannerLeft: '《基地月度工作简报》',
   subBannerRight: '2026年8月刊 · 第四期',
@@ -546,8 +546,8 @@ export const createDefaultGreyBulletin = (): BulletinDocument => ({
         imageLayout: 'side_by_side',
         imageAspectRatio: '3:4',
         images: [
-          createImageSlot('3:4', '社区交流活动', '/demo/csr_community_event.jpg'),
-          createImageSlot('3:4', '基础设施共建', '/demo/csr_community_support.jpg'),
+          createImageSlot('3:4', '社区交流活动', null),
+          createImageSlot('3:4', '基础设施共建', null),
         ],
       },
     ]),
@@ -598,9 +598,9 @@ export const createDefaultGreyBulletin = (): BulletinDocument => ({
         gridColumns: 3,
         imageAspectRatio: '4:3',
         images: [
-          createImageSlot('4:3', '拔河比赛与团队拓展', '/demo/employee_team_sports.jpg'),
-          createImageSlot('4:3', '员工交流晚会', '/demo/employee_team_sports.jpg'),
-          createImageSlot('4:3', '文体嘉年华', '/demo/employee_team_sports.jpg'),
+          createImageSlot('4:3', '拔河比赛与团队拓展', null),
+          createImageSlot('4:3', '员工交流晚会', null),
+          createImageSlot('4:3', '文体嘉年华', null),
         ],
       },
       {

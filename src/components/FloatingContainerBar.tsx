@@ -18,12 +18,14 @@ import { DragPayload, useBulletinStore } from '../store/useBulletinStore';
 
 interface FloatingContainerBarProps {
   onOpenLibraryTab?: () => void;
+  inline?: boolean;
 }
 
 export const FloatingContainerBar: React.FC<FloatingContainerBarProps> = ({
   onOpenLibraryTab,
+  inline = false,
 }) => {
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(inline);
 
   const lang = useBulletinStore((s) => s.lang);
   const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
@@ -89,16 +91,20 @@ export const FloatingContainerBar: React.FC<FloatingContainerBarProps> = ({
     }
   };
 
+  const wrapperClass = inline
+    ? 'w-full flex justify-center mt-5 mb-2 select-none relative z-10'
+    : 'fixed bottom-5 left-1/2 -translate-x-1/2 z-25 select-none animate-spring-in';
+
   if (isMinimized) {
     return (
       <div
-        className="fixed bottom-5 left-1/2 -translate-x-1/2 z-25 select-none animate-spring-in"
+        className={wrapperClass}
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={() => setIsMinimized(false)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900/95 hover:bg-zinc-800 backdrop-blur-xl border border-zinc-700/90 hover:border-blue-500/60 rounded-full text-xs font-bold text-zinc-200 hover:text-white shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-900/95 hover:bg-zinc-800 backdrop-blur-xl border border-zinc-750 hover:border-blue-500/60 rounded-full text-xs font-bold text-zinc-200 hover:text-white shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer"
           title={t('展开快捷容器插入工具栏', 'Expand Quick Container Bar')}
         >
           <Layers size={13} className="text-blue-400" />
@@ -111,7 +117,7 @@ export const FloatingContainerBar: React.FC<FloatingContainerBarProps> = ({
 
   return (
     <div
-      className="fixed bottom-5 left-1/2 -translate-x-1/2 z-25 select-none animate-spring-in"
+      className={wrapperClass}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center gap-1.5 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/80 rounded-2xl p-1.5 shadow-2xl text-xs">

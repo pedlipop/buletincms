@@ -431,13 +431,12 @@ const loadInitialState = () => {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.documents) && parsed.documents.length > 0) {
         const docs = parsed.documents as BulletinDocument[];
-        // Auto-upgrade empty placeholder slots with demo photos for optimal display
+        // Production clean: strip any legacy demo/placeholder image URLs
         docs.forEach((doc) => {
           doc.rootBlocks.forEach((rb) => {
             if (rb.type === 'masthead') {
-              if (!rb.heroImage.url) {
-                rb.heroImage.url = '/demo/hero_industrial_park.jpg';
-                rb.heroImage.label = '莫罗瓦利产业基地全景';
+              if (rb.heroImage?.url?.startsWith('/demo/')) {
+                rb.heroImage.url = null;
               }
               if (rb.orgNameLeft) {
                 rb.orgNameLeft = rb.orgNameLeft.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
@@ -453,30 +452,24 @@ const loadInitialState = () => {
               }
             }
             if (rb.type === 'section_container') {
+              if (rb.bgImage?.url?.startsWith('/demo/')) {
+                rb.bgImage.url = null;
+              }
               rb.children.forEach((cb) => {
                 if (cb.type === 'split_media_text') {
-                  if (cb.images[0] && !cb.images[0].url) {
-                    cb.images[0].url = '/demo/csr_community_event.jpg';
-                    cb.images[0].label = '社区交流活动';
-                  }
-                  if (cb.images[1] && !cb.images[1].url) {
-                    cb.images[1].url = '/demo/csr_community_support.jpg';
-                    cb.images[1].label = '基础设施共建';
-                  }
+                  cb.images.forEach((img) => {
+                    if (img.url?.startsWith('/demo/')) img.url = null;
+                  });
                 }
                 if (cb.type === 'dated_event_block') {
-                  cb.images.forEach((img, i) => {
-                    if (!img.url) {
-                      img.url = '/demo/employee_team_sports.jpg';
-                      img.label = `员工风采 0${i + 1}`;
-                    }
+                  cb.images.forEach((img) => {
+                    if (img.url?.startsWith('/demo/')) img.url = null;
                   });
                 }
               });
             }
-            if (rb.type === 'footer_banner' && !rb.bannerImage.url) {
-              rb.bannerImage.url = '/demo/hero_industrial_park.jpg';
-              rb.bannerImage.label = '产业基地全景';
+            if (rb.type === 'footer_banner' && rb.bannerImage?.url?.startsWith('/demo/')) {
+              rb.bannerImage.url = null;
             }
           });
         });

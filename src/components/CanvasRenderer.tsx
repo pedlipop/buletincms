@@ -769,16 +769,9 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
         );
 
         const handleAddPhoto = () => {
-          const demoUrls = [
-            '/demo/hero_industrial_park.jpg',
-            '/demo/csr_community_event.jpg',
-            '/demo/csr_community_support.jpg',
-            '/demo/employee_team_sports.jpg',
-          ];
-          const nextUrl = demoUrls[b.images.length % demoUrls.length];
           const nextImgs = [
             ...b.images,
-            createImageSlot(b.imageAspectRatio || '4:3', `PHOTO ${b.images.length + 1}`, nextUrl),
+            createImageSlot(b.imageAspectRatio || '4:3', `PHOTO ${b.images.length + 1}`, null),
           ];
           let nextPreset = b.layoutPreset;
           if (nextImgs.length === 4 && (!nextPreset || nextPreset === 'auto')) {

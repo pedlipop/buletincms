@@ -195,7 +195,7 @@ export const App: React.FC = () => {
     const startX = e.clientX;
     const startY = e.clientY;
     const initialRect = zoomMenuRef.current?.getBoundingClientRect();
-    const startLeft = initialRect ? initialRect.left : window.innerWidth - 260;
+    const startLeft = initialRect ? initialRect.left : window.innerWidth / 2 - 130;
     const startTop = initialRect ? initialRect.top : window.innerHeight - 70;
 
     const onMove = (moveEv: MouseEvent) => {
@@ -821,14 +821,14 @@ export const App: React.FC = () => {
             backgroundSize: '20px 20px',
           }}
         >
-          <div className="h-fit pb-24 md:pb-20 flex justify-center">
+          <div className="h-fit pb-24 md:pb-20 flex flex-col items-center">
             <CanvasRenderer exportRef={exportCanvasRef} />
+
+            {/* Container Quick Adder placed right next to the end of the pages (not floating) */}
+            <FloatingContainerBar inline onOpenLibraryTab={() => setMobileTab('library')} />
           </div>
 
-          {/* Floating Bottom Quick Containers Toolbar (3 options + Library Button) */}
-          <FloatingContainerBar onOpenLibraryTab={() => setMobileTab('library')} />
-
-          {/* Floating On-Canvas Zoom & Viewport Bar (Freely Draggable & Dismissable) */}
+          {/* Floating On-Canvas Zoom & Viewport Bar (Center Aligned) */}
           {isZoomBarVisible && (
             <div
               ref={zoomMenuRef}
@@ -844,7 +844,7 @@ export const App: React.FC = () => {
                   : undefined
               }
               className={`fixed ${
-                zoomBarPos ? '' : 'bottom-5 right-4 md:right-[340px]'
+                zoomBarPos ? '' : 'bottom-5 left-1/2 -translate-x-1/2'
               } z-30 flex items-center gap-0.5 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-lg p-1 shadow-2xl text-xs select-none animate-spring-in`}
               onClick={(e) => e.stopPropagation()}
             >

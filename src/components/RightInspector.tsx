@@ -884,24 +884,16 @@ export const RightInspector: React.FC = () => {
                 }
               }
 
-              const demoUrls = [
-                '/demo/hero_industrial_park.jpg',
-                '/demo/csr_community_event.jpg',
-                '/demo/csr_community_support.jpg',
-                '/demo/employee_team_sports.jpg',
-              ];
-
               const handleAddPhotoFromSlot = () => {
                 if (!effectiveRootBlock) return;
                 updateContentBlock(effectiveRootBlock.id, b.id, (prev) => {
                   const cur = prev as DatedEventBlock;
-                  const nextUrl = demoUrls[cur.images.length % demoUrls.length];
                   const nextImgs = [
                     ...cur.images,
                     createImageSlot(
                       selectedImageSlot.aspectRatio || cur.imageAspectRatio || '4:3',
                       `PHOTO ${cur.images.length + 1}`,
-                      nextUrl
+                      null
                     ),
                   ];
                   let nextPreset = cur.layoutPreset;
@@ -2448,23 +2440,15 @@ export const RightInspector: React.FC = () => {
                       }
                     }
 
-                    const demoUrls = [
-                      '/demo/hero_industrial_park.jpg',
-                      '/demo/csr_community_event.jpg',
-                      '/demo/csr_community_support.jpg',
-                      '/demo/employee_team_sports.jpg',
-                    ];
-
                     const handleAddPhoto = () => {
                       updateContentBlock(selectedRoot.id, b.id, (prev) => {
                         const cur = prev as DatedEventBlock;
-                        const nextUrl = demoUrls[cur.images.length % demoUrls.length];
                         const nextImgs = [
                           ...cur.images,
                           createImageSlot(
                             cur.imageAspectRatio || '4:3',
                             `PHOTO ${cur.images.length + 1}`,
-                            nextUrl
+                            null
                           ),
                         ];
                         let nextPreset = cur.layoutPreset;
@@ -2553,12 +2537,11 @@ export const RightInspector: React.FC = () => {
                                     const cur = prev as DatedEventBlock;
                                     const nextImgs = [...cur.images];
                                     while (nextImgs.length < cols) {
-                                      const nextUrl = demoUrls[nextImgs.length % demoUrls.length];
                                       nextImgs.push(
                                         createImageSlot(
                                           cur.imageAspectRatio,
                                           `PHOTO ${nextImgs.length + 1}`,
-                                          nextUrl
+                                          null
                                         )
                                       );
                                     }
