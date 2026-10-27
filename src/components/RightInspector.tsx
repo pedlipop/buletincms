@@ -167,7 +167,9 @@ export const RightInspector: React.FC = () => {
   const containerBgInputRef = useRef<HTMLInputElement>(null);
   const cornerStickerInputRef = useRef<HTMLInputElement>(null);
   const fontReaderInputRef = useRef<HTMLInputElement>(null);
-  const [isTextToolOpen, setIsTextToolOpen] = useState(true);
+  const [isTextToolOpen, setIsTextToolOpen] = useState(false);
+  const [imageSlotTab, setImageSlotTab] = useState<'size' | 'frame' | 'crop'>('size');
+  const [isFrameDetailsOpen, setIsFrameDetailsOpen] = useState(false);
 
   const customFonts = useBulletinStore((s) => s.customFonts);
   const addCustomFont = useBulletinStore((s) => s.addCustomFont);
@@ -388,79 +390,79 @@ export const RightInspector: React.FC = () => {
 
       <div className="p-3 space-y-4">
         {/* ========================================================= */}
-        {/* TEXT ADJUSTMENT TOOL & FONT READER                        */}
+        {/* TEXT ADJUSTMENT TOOL & FONT READER (Hidden when Photo Selected) */}
         {/* ========================================================= */}
-        <div className="bg-zinc-800/80 border border-zinc-700/80 rounded-lg p-3 space-y-3">
-          <div className="flex items-center justify-between border-b border-zinc-700/60 pb-2">
-            <button
-              type="button"
-              onClick={() => setIsTextToolOpen(!isTextToolOpen)}
-              className="flex items-center gap-1.5 text-xs font-bold text-white hover:text-amber-300 transition-colors"
-            >
-              <Type size={14} className="text-amber-400" />
-              <span>{t('文本排版调节与字库', 'Text & Font Reader')}</span>
-            </button>
-            <div className="flex items-center gap-1.5">
+        {!selectedImageSlot && (
+          <div className="bg-zinc-800/80 border border-zinc-700/80 rounded-lg p-3 space-y-2.5">
+            <div className="flex items-center justify-between border-b border-zinc-700/60 pb-2">
               <button
                 type="button"
-                onClick={() => fontReaderInputRef.current?.click()}
-                className="flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-700/80 hover:bg-zinc-700 text-amber-300 text-[10px] font-semibold border border-zinc-600 transition-colors"
-                title={t('导入本地字体文件 (.ttf / .otf / .woff)', 'Import Font File (.ttf/.otf/.woff)')}
+                onClick={() => setIsTextToolOpen(!isTextToolOpen)}
+                className="flex items-center gap-1.5 text-xs font-bold text-white hover:text-amber-300 transition-colors"
               >
-                <Upload size={11} />
-                <span>{t('导入字体', 'Font Reader')}</span>
+                <Type size={14} className="text-amber-400" />
+                <span>{t('文本排版与字库', 'Text & Fonts')}</span>
+                <span className="text-[10px] text-zinc-500 font-normal">
+                  {isTextToolOpen ? '▾' : '▸'}
+                </span>
               </button>
-            </div>
-          </div>
-
-          <input
-            ref={fontReaderInputRef}
-            type="file"
-            accept=".ttf,.otf,.woff,.woff2"
-            onChange={handleFontFileUpload}
-            className="hidden"
-          />
-
-          {isTextToolOpen && (
-            <div className="space-y-3">
-              {/* 1. Font Family Selector */}
-              <div>
-                <div className="flex items-center justify-between mb-1 text-[10px] text-zinc-400 font-semibold">
-                  <span>{t('应用与画布字体', 'Font Family')}</span>
-                  <span className="font-mono text-zinc-500 truncate max-w-[120px]">
-                    {doc.fontFamily || '系统默认'}
-                  </span>
-                </div>
-                <select
-                  value={doc.fontFamily || ''}
-                  onChange={(e) => updateDocumentMeta({ fontFamily: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-amber-400 cursor-pointer"
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => fontReaderInputRef.current?.click()}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-700/80 hover:bg-zinc-700 text-amber-300 text-[10px] font-semibold border border-zinc-600 transition-colors"
+                  title={t('导入本地字体文件 (.ttf / .otf / .woff)', 'Import Font File (.ttf/.otf/.woff)')}
                 >
-                  <option value="">{t('系统默认黑体 (Inter / 苹方)', 'System Default (Inter)')}</option>
-                  <optgroup label={t('精选字体预设', 'Curated Web Fonts')}>
-                    {PRESET_FONTS.map((f) => (
-                      <option key={f.id} value={f.family}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                  {customFonts.length > 0 && (
-                    <optgroup label={t('已导入字库 (Font Reader)', 'Imported Custom Fonts')}>
-                      {customFonts.map((f) => (
+                  <Upload size={11} />
+                  <span>{t('导入字体', 'Import Font')}</span>
+                </button>
+              </div>
+            </div>
+
+            <input
+              ref={fontReaderInputRef}
+              type="file"
+              accept=".ttf,.otf,.woff,.woff2"
+              onChange={handleFontFileUpload}
+              className="hidden"
+            />
+
+            {isTextToolOpen && (
+              <div className="space-y-2.5 pt-0.5">
+                {/* 1. Font Family Selector */}
+                <div>
+                  <div className="flex items-center justify-between mb-1 text-[10px] text-zinc-400 font-semibold">
+                    <span>{t('全局排版字体', 'Font Family')}</span>
+                    <span className="font-mono text-zinc-500 truncate max-w-[120px]">
+                      {doc.fontFamily || '系统默认'}
+                    </span>
+                  </div>
+                  <select
+                    value={doc.fontFamily || ''}
+                    onChange={(e) => updateDocumentMeta({ fontFamily: e.target.value })}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-amber-400 cursor-pointer"
+                  >
+                    <option value="">{t('系统默认黑体 (Inter / 苹方)', 'System Default (Inter)')}</option>
+                    <optgroup label={t('精选字体预设', 'Curated Web Fonts')}>
+                      {PRESET_FONTS.map((f) => (
                         <option key={f.id} value={f.family}>
-                          ★ {f.name}
+                          {f.name}
                         </option>
                       ))}
                     </optgroup>
-                  )}
-                </select>
-              </div>
+                    {customFonts.length > 0 && (
+                      <optgroup label={t('已导入字库 (Font Reader)', 'Imported Custom Fonts')}>
+                        {customFonts.map((f) => (
+                          <option key={f.id} value={f.family}>
+                            ★ {f.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </div>
 
-              {/* 2. Style & Alignment Toolbar */}
-              <div>
-                <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                  {t('快捷文字样式与对齐', 'Quick Text Styles & Align')}
-                </label>
+                {/* 2. Compact Style & Alignment Toolbar */}
                 <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-800 rounded p-1">
                   <button
                     type="button"
@@ -468,10 +470,10 @@ export const RightInspector: React.FC = () => {
                       e.preventDefault();
                       execCmd('bold');
                     }}
-                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-xs transition-colors"
+                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-xs"
                     title={t('加粗 (Bold)', 'Bold')}
                   >
-                    <Bold size={13} />
+                    <Bold size={12} />
                   </button>
                   <button
                     type="button"
@@ -479,10 +481,10 @@ export const RightInspector: React.FC = () => {
                       e.preventDefault();
                       execCmd('italic');
                     }}
-                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
+                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center text-xs"
                     title={t('斜体 (Italic)', 'Italic')}
                   >
-                    <Italic size={13} />
+                    <Italic size={12} />
                   </button>
                   <button
                     type="button"
@@ -490,10 +492,10 @@ export const RightInspector: React.FC = () => {
                       e.preventDefault();
                       execCmd('underline');
                     }}
-                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
+                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center text-xs"
                     title={t('下划线 (Underline)', 'Underline')}
                   >
-                    <Underline size={13} />
+                    <Underline size={12} />
                   </button>
                   <button
                     type="button"
@@ -501,10 +503,10 @@ export const RightInspector: React.FC = () => {
                       e.preventDefault();
                       execCmd('strikeThrough');
                     }}
-                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
-                    title={t('删除线 (Strikethrough)', 'Strikethrough')}
+                    className="flex-1 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white flex items-center justify-center text-xs"
+                    title={t('删除线', 'Strikethrough')}
                   >
-                    <Strikethrough size={13} />
+                    <Strikethrough size={12} />
                   </button>
 
                   <div className="h-4 w-px bg-zinc-800 mx-0.5" />
@@ -515,10 +517,10 @@ export const RightInspector: React.FC = () => {
                       e.preventDefault();
                       execCmd('justifyLeft');
                     }}
-                    className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors"
+                    className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white"
                     title={t('左对齐', 'Align Left')}
                   >
-                    <AlignLeft size={13} />
+                    <AlignLeft size={12} />
                   </button>
                   <button
                     type="button"
@@ -526,10 +528,10 @@ export const RightInspector: React.FC = () => {
                       e.preventDefault();
                       execCmd('justifyCenter');
                     }}
-                    className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors"
+                    className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white"
                     title={t('居中对齐', 'Align Center')}
                   >
-                    <AlignCenter size={13} />
+                    <AlignCenter size={12} />
                   </button>
                   <button
                     type="button"
@@ -537,60 +539,34 @@ export const RightInspector: React.FC = () => {
                       e.preventDefault();
                       execCmd('justifyRight');
                     }}
-                    className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors"
+                    className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white"
                     title={t('右对齐', 'Align Right')}
                   >
-                    <AlignRight size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      execCmd('justifyFull');
-                    }}
-                    className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors"
-                    title={t('两端对齐', 'Justify')}
-                  >
-                    <AlignJustify size={13} />
+                    <AlignRight size={12} />
                   </button>
                 </div>
-              </div>
 
-              {/* 3. Font Size Presets */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[10px] font-semibold text-zinc-400">
-                    {t('选区字号快速调节', 'Font Size (Selection)')}
-                  </label>
-                  <span className="text-[9px] text-zinc-500 font-mono">px</span>
-                </div>
-                <div className="grid grid-cols-6 gap-1">
-                  {[12, 14, 16, 18, 22, 28].map((size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        formatFontSize(size);
-                      }}
-                      className="py-1 rounded text-[10.5px] font-mono font-semibold bg-zinc-950 hover:bg-zinc-700 text-zinc-300 border border-zinc-800 hover:border-zinc-600 transition-colors"
+                {/* 3. Unified Font Size & Quick Colors */}
+                <div className="flex items-center justify-between gap-2 bg-zinc-950 border border-zinc-800 rounded p-1.5 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-400 font-semibold">{t('字号', 'Size')}:</span>
+                    <select
+                      onChange={(e) => formatFontSize(Number(e.target.value))}
+                      className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-[11px] rounded px-1.5 py-0.5 font-mono outline-none cursor-pointer"
+                      defaultValue={14}
                     >
-                      {size}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                      {[12, 14, 16, 18, 20, 24, 28, 32].map((s) => (
+                        <option key={s} value={s}>
+                          {s}px
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              {/* 4. Text Color & Highlight */}
-              <div className="space-y-1.5 pt-0.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-semibold text-zinc-400">
-                    {t('文字颜色与荧光高亮', 'Text Color & Highlighter')}
-                  </label>
-                </div>
-                <div className="flex items-center justify-between gap-1 bg-zinc-950 border border-zinc-800 rounded p-1.5">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {['#18181b', '#ffffff', '#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed'].map((c) => (
+                  <div className="h-4 w-px bg-zinc-800" />
+
+                  <div className="flex items-center gap-1">
+                    {['#18181b', '#ffffff', '#2563eb', '#dc2626'].map((c) => (
                       <button
                         key={c}
                         type="button"
@@ -599,24 +575,22 @@ export const RightInspector: React.FC = () => {
                           execCmd('foreColor', c);
                         }}
                         style={{ backgroundColor: c }}
-                        className="w-4 h-4 rounded-full border border-zinc-700 hover:scale-110 transition-transform cursor-pointer"
+                        className="w-3.5 h-3.5 rounded-full border border-zinc-700 hover:scale-110 transition-transform cursor-pointer"
                         title={`Color: ${c}`}
                       />
                     ))}
-                    {/* Native Color Picker */}
                     <input
                       type="color"
                       onChange={(e) => execCmd('foreColor', e.target.value)}
                       className="w-4 h-4 rounded-full border-0 bg-transparent cursor-pointer"
-                      title={t('自定义文本颜色', 'Custom Text Color')}
+                      title={t('自定义颜色', 'Custom Color')}
                     />
                   </div>
 
                   <div className="h-4 w-px bg-zinc-800" />
 
-                  {/* Highlights */}
                   <div className="flex items-center gap-1">
-                    {['#fef08a', '#bbf7d0', '#bae6fd', '#fecdd3', '#e9d5ff'].map((hc) => (
+                    {['#fef08a', '#bbf7d0', '#bae6fd'].map((hc) => (
                       <button
                         key={hc}
                         type="button"
@@ -625,16 +599,16 @@ export const RightInspector: React.FC = () => {
                           execCmd('hiliteColor', hc);
                         }}
                         style={{ backgroundColor: hc }}
-                        className="w-3.5 h-3.5 rounded-sm border border-zinc-700 hover:scale-110 transition-transform cursor-pointer"
+                        className="w-3 h-3 rounded-sm border border-zinc-700 hover:scale-110 transition-transform cursor-pointer"
                         title={`Highlight: ${hc}`}
                       />
                     ))}
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* ========================================================= */}
         {/* 1. SELECTED IMAGE SLOT & PHOTO FRAME INSPECTOR            */}
@@ -651,841 +625,790 @@ export const RightInspector: React.FC = () => {
               </span>
             </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleUploadForSelectedSlot}
-              className="hidden"
-            />
-            <div className="flex gap-1.5">
+            {/* 3 Tab Switcher */}
+            <div className="grid grid-cols-3 gap-1 bg-zinc-950 p-1 rounded-md border border-zinc-800 text-[11px] font-bold">
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex-1 py-1.5 px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold flex items-center justify-center gap-1.5"
+                onClick={() => setImageSlotTab('size')}
+                className={`py-1 rounded text-center transition-colors ${
+                  imageSlotTab === 'size'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
               >
-                <Upload size={12} />
-                <span>
-                  {selectedImageSlot.url
-                    ? t('更换图片', 'Replace Photo')
-                    : t('上传图片', 'Upload Photo')}
-                </span>
+                {t('尺寸比例', 'Size & Ratio')}
               </button>
-              {selectedImageSlot.url && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateImageSlotById(selectedImageSlot.id, {
-                      url: null,
-                      zoom: 1,
-                      focalPoint: { x: 50, y: 50 },
-                    })
-                  }
-                  className="px-2.5 py-1.5 bg-zinc-900 hover:bg-red-950/60 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-xs"
-                >
-                  {t('清除', 'Clear')}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setImageSlotTab('frame')}
+                className={`py-1 rounded text-center transition-colors ${
+                  imageSlotTab === 'frame'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {t('画框预设', 'Frame Style')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageSlotTab('crop')}
+                className={`py-1 rounded text-center transition-colors ${
+                  imageSlotTab === 'crop'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {t('画面调节', 'Crop & Pan')}
+              </button>
             </div>
 
-            {/* Aspect Ratio */}
-            <div>
-              <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                {t('画幅比例', 'Aspect Ratio')}
-              </label>
-              <div className="grid grid-cols-6 gap-1">
-                {ASPECT_RATIOS.map((ratio) => (
-                  <button
-                    key={ratio}
-                    type="button"
-                    onClick={() =>
-                      updateImageSlotById(selectedImageSlot.id, {
-                        aspectRatio: ratio,
-                      })
-                    }
-                    className={`py-1 rounded text-[10px] font-bold border ${
-                      selectedImageSlot.aspectRatio === ratio
-                        ? 'bg-blue-600 border-blue-400 text-white'
-                        : 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-zinc-500'
-                    }`}
-                  >
-                    {ratio === 'free' ? t('自由', 'Free') : ratio}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Picture Frame Size & Alignment */}
-            <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-zinc-200">
-                  {t('画框尺寸与对齐', 'Frame Size & Alignment')}
-                </span>
-                {((selectedImageSlot.frameWidthMode && selectedImageSlot.frameWidthMode !== 'full') ||
-                  selectedImageSlot.frameHeightMode === 'custom_px' ||
-                  (selectedImageSlot.frameAlign && selectedImageSlot.frameAlign !== 'center')) && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateImageSlotById(selectedImageSlot.id, {
-                        frameWidthMode: 'full',
-                        frameHeightMode: 'aspect',
-                        frameAlign: 'center',
-                        frameCustomWidthPx: undefined,
-                        frameCustomHeightPx: undefined,
-                      })
-                    }
-                    className="flex items-center gap-1 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
-                  >
-                    <RotateCcw size={10} />
-                    <span>{t('重置尺寸', 'Reset')}</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Frame Width Modes */}
-              <div>
-                <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                  {t('画框宽度', 'Frame Width')}
-                </label>
-                <div className="grid grid-cols-4 gap-1">
-                  {(
-                    [
-                      { mode: 'full', label: '100%' },
-                      { mode: '75%', label: '75%' },
-                      { mode: '50%', label: '50%' },
-                      { mode: 'custom_px', label: t('像素', 'Custom') },
-                    ] as const
-                  ).map((item) => {
-                    const isSelectedMode =
-                      (selectedImageSlot.frameWidthMode || 'full') === item.mode;
-                    return (
-                      <button
-                        key={item.mode}
-                        type="button"
-                        onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            frameWidthMode: item.mode,
-                            frameCustomWidthPx:
-                              item.mode === 'custom_px'
-                                ? selectedImageSlot.frameCustomWidthPx || 320
-                                : selectedImageSlot.frameCustomWidthPx,
-                          })
-                        }
-                        className={`py-1 rounded text-[10px] font-bold border ${
-                          isSelectedMode
-                            ? 'bg-blue-600 border-blue-400 text-white'
-                            : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-500'
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {selectedImageSlot.frameWidthMode === 'custom_px' && (
-                  <div className="mt-2 space-y-1 bg-zinc-950/60 p-2 rounded border border-zinc-800">
-                    <div className="flex justify-between text-[10px] text-zinc-400">
-                      <span>{t('自定义宽度 (px)', 'Custom Width (px)')}</span>
-                      <span className="font-mono text-zinc-200">
-                        {selectedImageSlot.frameCustomWidthPx || 320}px
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="range"
-                        min={80}
-                        max={800}
-                        step={10}
-                        value={selectedImageSlot.frameCustomWidthPx || 320}
-                        onChange={(e) =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            frameWidthMode: 'custom_px',
-                            frameCustomWidthPx: Number(e.target.value),
-                          })
-                        }
-                        className="flex-1 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                      />
-                      <input
-                        type="number"
-                        min={80}
-                        max={800}
-                        value={selectedImageSlot.frameCustomWidthPx || 320}
-                        onChange={(e) =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            frameWidthMode: 'custom_px',
-                            frameCustomWidthPx: Math.max(80, Math.min(800, Number(e.target.value))),
-                          })
-                        }
-                        className="w-14 bg-zinc-900 border border-zinc-700 rounded px-1.5 py-0.5 text-right font-mono text-[10px] text-zinc-200"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Frame Height Mode */}
-              <div>
-                <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                  {t('画框高度', 'Frame Height')}
-                </label>
-                <div className="grid grid-cols-2 gap-1 mb-1.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateImageSlotById(selectedImageSlot.id, {
-                        frameHeightMode: 'aspect',
-                      })
-                    }
-                    className={`py-1 rounded text-[10px] font-bold border ${
-                      (selectedImageSlot.frameHeightMode || 'aspect') === 'aspect'
-                        ? 'bg-blue-600 border-blue-400 text-white'
-                        : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-500'
-                    }`}
-                  >
-                    {t('按画幅比例', 'By Aspect Ratio')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateImageSlotById(selectedImageSlot.id, {
-                        frameHeightMode: 'custom_px',
-                        frameCustomHeightPx: selectedImageSlot.frameCustomHeightPx || 200,
-                      })
-                    }
-                    className={`py-1 rounded text-[10px] font-bold border ${
-                      selectedImageSlot.frameHeightMode === 'custom_px'
-                        ? 'bg-blue-600 border-blue-400 text-white'
-                        : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-500'
-                    }`}
-                  >
-                    {t('固定像素高度', 'Fixed Height (px)')}
-                  </button>
-                </div>
-
-                {selectedImageSlot.frameHeightMode === 'custom_px' && (
-                  <div className="space-y-1.5 bg-zinc-950/60 p-2 rounded border border-zinc-800">
-                    <div className="grid grid-cols-4 gap-1">
-                      {[120, 180, 240, 320].map((h) => (
-                        <button
-                          key={h}
-                          type="button"
-                          onClick={() =>
-                            updateImageSlotById(selectedImageSlot.id, {
-                              frameHeightMode: 'custom_px',
-                              frameCustomHeightPx: h,
-                            })
-                          }
-                          className={`py-0.5 rounded text-[9px] font-mono border ${
-                            selectedImageSlot.frameCustomHeightPx === h
-                              ? 'bg-blue-600 border-blue-400 text-white'
-                              : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                          }`}
-                        >
-                          {h}px
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex justify-between text-[10px] text-zinc-400">
-                      <span>{t('自定义高度 (px)', 'Custom Height (px)')}</span>
-                      <span className="font-mono text-zinc-200">
-                        {selectedImageSlot.frameCustomHeightPx || 200}px
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="range"
-                        min={60}
-                        max={600}
-                        step={10}
-                        value={selectedImageSlot.frameCustomHeightPx || 200}
-                        onChange={(e) =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            frameHeightMode: 'custom_px',
-                            frameCustomHeightPx: Number(e.target.value),
-                          })
-                        }
-                        className="flex-1 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                      />
-                      <input
-                        type="number"
-                        min={60}
-                        max={600}
-                        value={selectedImageSlot.frameCustomHeightPx || 200}
-                        onChange={(e) =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            frameHeightMode: 'custom_px',
-                            frameCustomHeightPx: Math.max(60, Math.min(600, Number(e.target.value))),
-                          })
-                        }
-                        className="w-14 bg-zinc-900 border border-zinc-700 rounded px-1.5 py-0.5 text-right font-mono text-[10px] text-zinc-200"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Frame Alignment */}
-              <div>
-                <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                  {t('画框对齐方式', 'Frame Alignment')}
-                </label>
-                <div className="grid grid-cols-3 gap-1">
-                  {(
-                    [
-                      { align: 'left', icon: AlignLeft, label: t('居左', 'Left') },
-                      { align: 'center', icon: AlignCenter, label: t('居中', 'Center') },
-                      { align: 'right', icon: AlignRight, label: t('居右', 'Right') },
-                    ] as const
-                  ).map((item) => {
-                    const isSelectedAlign =
-                      (selectedImageSlot.frameAlign || 'center') === item.align;
-                    const IconComp = item.icon;
-                    return (
-                      <button
-                        key={item.align}
-                        type="button"
-                        onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            frameAlign: item.align,
-                          })
-                        }
-                        className={`py-1 flex items-center justify-center gap-1 rounded text-[10px] font-bold border ${
-                          isSelectedAlign
-                            ? 'bg-blue-600 border-blue-400 text-white'
-                            : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-500'
-                        }`}
-                      >
-                        <IconComp size={11} />
-                        <span>{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Arrange Picture Inside Frame (Zoom & Pan) */}
-            <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-zinc-200">
-                  {t('框内画面缩放与移动', 'Arrange Picture in Frame')}
-                </span>
-                {(selectedImageSlot.zoom !== 1 ||
-                  selectedImageSlot.focalPoint.x !== 50 ||
-                  selectedImageSlot.focalPoint.y !== 50) && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateImageSlotById(selectedImageSlot.id, {
-                        zoom: 1,
-                        focalPoint: { x: 50, y: 50 },
-                      })
-                    }
-                    className="flex items-center gap-1 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
-                  >
-                    <RotateCcw size={10} />
-                    <span>{t('居中复原', 'Reset')}</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Zoom Slider with Default Line at 1.0x */}
-              <div>
-                <div className="flex justify-between text-[10px] text-zinc-400">
-                  <span>{t('画面缩放 (Zoom)', 'Zoom In / Out')}</span>
-                  <span className="font-mono text-zinc-200">
-                    {Math.round(selectedImageSlot.zoom * 100)}%
-                  </span>
-                </div>
-                <RangeSliderWithDefault
-                  min={0.5}
-                  max={2.5}
-                  step={0.05}
-                  value={selectedImageSlot.zoom}
-                  defaultValue={1}
-                  unit="x"
-                  lang={lang}
-                  onChange={(val) =>
-                    updateImageSlotById(selectedImageSlot.id, { zoom: val })
-                  }
-                />
-              </div>
-
-              {/* Pan X & Pan Y Sliders with Default Line at 50% */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <div className="flex justify-between text-[10px] text-zinc-400">
-                    <span>{t('左右移动 (X)', 'Move Left/Right')}</span>
-                    <span className="font-mono text-zinc-200">
-                      {selectedImageSlot.focalPoint.x - 50 > 0
-                        ? `+${selectedImageSlot.focalPoint.x - 50}`
-                        : selectedImageSlot.focalPoint.x - 50}
-                    </span>
-                  </div>
-                  <RangeSliderWithDefault
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={selectedImageSlot.focalPoint.x}
-                    defaultValue={50}
-                    unit="%"
-                    lang={lang}
-                    onChange={(val) =>
-                      updateImageSlotById(selectedImageSlot.id, {
-                        focalPoint: {
-                          ...selectedImageSlot.focalPoint,
-                          x: Math.round(val),
-                        },
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between text-[10px] text-zinc-400">
-                    <span>{t('上下移动 (Y)', 'Move Up/Down')}</span>
-                    <span className="font-mono text-zinc-200">
-                      {selectedImageSlot.focalPoint.y - 50 > 0
-                        ? `+${selectedImageSlot.focalPoint.y - 50}`
-                        : selectedImageSlot.focalPoint.y - 50}
-                    </span>
-                  </div>
-                  <RangeSliderWithDefault
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={selectedImageSlot.focalPoint.y}
-                    defaultValue={50}
-                    unit="%"
-                    lang={lang}
-                    onChange={(val) =>
-                      updateImageSlotById(selectedImageSlot.id, {
-                        focalPoint: {
-                          ...selectedImageSlot.focalPoint,
-                          y: Math.round(val),
-                        },
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="text-[10px] text-zinc-400">
-                {t(
-                  '💡 提示：也可直接在画布上按住图片拖动位置',
-                  '💡 Tip: Drag image directly on the canvas to pan'
-                )}
-              </div>
-            </div>
-
-            {/* Quick Frame Presets */}
-            <div className="space-y-2.5 pt-2 border-t border-zinc-700/70">
-              <div>
-                <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                  {t('画框预设', 'Frame Preset')}
-                </label>
-                <div className="grid grid-cols-3 gap-1">
-                  {(
-                    [
-                      {
-                        zh: '无框',
-                        en: 'None',
-                        patch: {
-                          frameRadius: 4,
-                          frameBorderWidth: 0,
-                          frameMatPadding: 0,
-                          frameShadow: 'none' as const,
-                        },
-                      },
-                      {
-                        zh: '圆角',
-                        en: 'Rounded',
-                        patch: {
-                          frameRadius: 12,
-                          frameBorderWidth: 0,
-                          frameMatPadding: 0,
-                          frameShadow: 'sm' as const,
-                        },
-                      },
-                      {
-                        zh: '拍立得',
-                        en: 'Polaroid',
-                        patch: {
-                          frameRadius: 8,
-                          frameBorderWidth: 1,
-                          frameBorderColor: '#d4d4d8',
-                          frameBorderStyle: 'solid' as const,
-                          frameMatPadding: 6,
-                          frameMatColor: '#ffffff',
-                          frameShadow: 'md' as const,
-                        },
-                      },
-                      {
-                        zh: '邮票虚线',
-                        en: 'Stamp',
-                        patch: {
-                          frameRadius: 6,
-                          frameBorderWidth: 2,
-                          frameBorderColor: '#71717a',
-                          frameBorderStyle: 'dashed' as const,
-                          frameMatPadding: 5,
-                          frameMatColor: '#fafafa',
-                          frameShadow: 'sm' as const,
-                        },
-                      },
-                      {
-                        zh: '古典双线',
-                        en: 'Double',
-                        patch: {
-                          frameRadius: 4,
-                          frameBorderWidth: 4,
-                          frameBorderColor: '#52525b',
-                          frameBorderStyle: 'double' as const,
-                          frameMatPadding: 4,
-                          frameMatColor: '#ffffff',
-                          frameShadow: 'none' as const,
-                        },
-                      },
-                      {
-                        zh: '正圆画框',
-                        en: 'Circle',
-                        patch: {
-                          frameRadius: 999,
-                          frameBorderWidth: 3,
-                          frameBorderColor: '#ffffff',
-                          frameBorderStyle: 'solid' as const,
-                          frameMatPadding: 0,
-                          frameShadow: 'md' as const,
-                        },
-                      },
-                    ]
-                  ).map((preset) => (
-                    <button
-                      key={preset.en}
-                      type="button"
-                      onClick={() =>
-                        updateImageSlotById(selectedImageSlot.id, preset.patch)
-                      }
-                      className="py-1 px-1.5 rounded text-[10px] font-semibold bg-zinc-900 hover:bg-zinc-700 text-zinc-200 border border-zinc-700"
-                    >
-                      {t(preset.zh, preset.en)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Radius & Mat Padding */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                    {t('圆角', 'Radius')}
-                  </label>
-                  <div className="grid grid-cols-5 gap-0.5">
-                    {[0, 6, 12, 20, 999].map((r) => (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            frameRadius: r,
-                          })
-                        }
-                        className={`py-1 rounded text-[10px] font-bold border ${
-                          (selectedImageSlot.frameRadius ?? 4) === r
-                            ? 'bg-zinc-100 text-zinc-900 border-white'
-                            : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                        }`}
-                      >
-                        {r === 999 ? '●' : r}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                    {t('白边留白', 'Mat Pad')}
-                  </label>
-                  <div className="grid grid-cols-4 gap-0.5">
-                    {[0, 4, 8, 12].map((mp) => (
-                      <button
-                        key={mp}
-                        type="button"
-                        onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            frameMatPadding: mp,
-                          })
-                        }
-                        className={`py-1 rounded text-[10px] font-bold border ${
-                          (selectedImageSlot.frameMatPadding ?? 0) === mp
-                            ? 'bg-zinc-100 text-zinc-900 border-white'
-                            : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                        }`}
-                      >
-                        {mp}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Border Width, Color & Shadow */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                    {t('外框粗细与颜色', 'Border')}
-                  </label>
-                  <div className="flex items-center gap-1">
-                    {[0, 1, 2, 4].map((bw) => (
-                      <button
-                        key={bw}
-                        type="button"
-                        onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            frameBorderWidth: bw,
-                          })
-                        }
-                        className={`flex-1 py-1 rounded text-[10px] font-bold border ${
-                          (selectedImageSlot.frameBorderWidth ?? 0) === bw
-                            ? 'bg-zinc-100 text-zinc-900 border-white'
-                            : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                        }`}
-                      >
-                        {bw}
-                      </button>
-                    ))}
-                    <input
-                      type="color"
-                      value={selectedImageSlot.frameBorderColor || '#d4d4d8'}
-                      onChange={(e) =>
-                        updateImageSlotById(selectedImageSlot.id, {
-                          frameBorderColor: e.target.value,
-                        })
-                      }
-                      className="w-5 h-5 bg-transparent border-0 cursor-pointer shrink-0"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                    {t('阴影效果', 'Shadow')}
-                  </label>
-                  <div className="grid grid-cols-4 gap-1">
-                    {(
-                      [
-                        { id: 'none', zh: '无', en: '0' },
-                        { id: 'sm', zh: '浅', en: 'S' },
-                        { id: 'md', zh: '深', en: 'M' },
-                        { id: 'hard', zh: '立体', en: '3D' },
-                      ] as const
-                    ).map((sh) => (
-                      <button
-                        key={sh.id}
-                        type="button"
-                        onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            frameShadow: sh.id,
-                          })
-                        }
-                        className={`py-1 rounded text-[10px] font-semibold border ${
-                          (selectedImageSlot.frameShadow || 'none') === sh.id
-                            ? 'bg-zinc-100 text-zinc-900 border-white'
-                            : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                        }`}
-                      >
-                        {t(sh.zh, sh.en)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Custom Frame Asset (Behind or In Front of Picture Frame) */}
-              <div className="pt-1 space-y-2">
+            {/* TAB 1: SIZE & RATIO */}
+            {imageSlotTab === 'size' && (
+              <div className="space-y-3">
+                {/* Upload & Clear Actions */}
                 <input
-                  ref={frameOverlayInputRef}
+                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  onChange={handleUploadFrameOverlay}
+                  onChange={handleUploadForSelectedSlot}
                   className="hidden"
                 />
                 <div className="flex gap-1.5">
                   <button
                     type="button"
-                    onClick={() => frameOverlayInputRef.current?.click()}
-                    className="flex-1 py-1.5 px-2 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 rounded text-[11px] font-semibold flex items-center justify-center gap-1"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 py-1.5 px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                   >
-                    <Upload size={11} />
+                    <Upload size={12} />
                     <span>
-                      {selectedImageSlot.frameOverlayUrl
-                        ? t('更换自定义相框素材', 'Change Frame Asset')
-                        : t('上传自定义相框素材 (后置/前景)', 'Upload Frame Asset')}
+                      {selectedImageSlot.url
+                        ? t('更换图片', 'Replace Photo')
+                        : t('上传图片', 'Upload Photo')}
                     </span>
                   </button>
-                  {selectedImageSlot.frameOverlayUrl && (
+                  {selectedImageSlot.url && (
                     <button
                       type="button"
                       onClick={() =>
                         updateImageSlotById(selectedImageSlot.id, {
-                          frameOverlayUrl: null,
-                          frameAssetScale: 1,
-                          frameAssetX: 0,
-                          frameAssetY: 0,
+                          url: null,
+                          zoom: 1,
+                          focalPoint: { x: 50, y: 50 },
                         })
                       }
-                      className="px-2 py-1 bg-zinc-950 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-[11px]"
+                      className="px-2.5 py-1.5 bg-zinc-900 hover:bg-red-950/60 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-xs transition-colors"
                     >
                       {t('清除', 'Clear')}
                     </button>
                   )}
                 </div>
 
-                {selectedImageSlot.frameOverlayUrl && (
-                  <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-amber-300">
-                        {t('自定义相框素材位置与大小', 'Custom Frame Size & Position')}
-                      </span>
-                      {((selectedImageSlot.frameAssetScale ?? 1) !== 1 ||
-                        (selectedImageSlot.frameAssetX || 0) !== 0 ||
-                        (selectedImageSlot.frameAssetY || 0) !== 0) && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateImageSlotById(selectedImageSlot.id, {
-                              frameAssetScale: 1,
-                              frameAssetX: 0,
-                              frameAssetY: 0,
-                            })
-                          }
-                          className="flex items-center gap-1 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
-                        >
-                          <RotateCcw size={10} />
-                          <span>{t('重置', 'Reset')}</span>
-                        </button>
-                      )}
+                {/* Aspect Ratio */}
+                <div>
+                  <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                    {t('画幅比例', 'Aspect Ratio')}
+                  </label>
+                  <div className="grid grid-cols-6 gap-0.5 bg-zinc-950 p-0.5 rounded border border-zinc-800">
+                    {ASPECT_RATIOS.map((ratio) => (
+                      <button
+                        key={ratio}
+                        type="button"
+                        onClick={() =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            aspectRatio: ratio,
+                          })
+                        }
+                        className={`py-1 rounded text-[10px] font-bold transition-colors ${
+                          selectedImageSlot.aspectRatio === ratio
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {ratio === 'free' ? t('自由', 'Free') : ratio}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Picture Frame Size & Alignment */}
+                <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-zinc-200">
+                      {t('画框尺寸与对齐', 'Frame Size & Alignment')}
+                    </span>
+                    {((selectedImageSlot.frameWidthMode && selectedImageSlot.frameWidthMode !== 'full') ||
+                      selectedImageSlot.frameHeightMode === 'custom_px' ||
+                      (selectedImageSlot.frameAlign && selectedImageSlot.frameAlign !== 'center')) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            frameWidthMode: 'full',
+                            frameHeightMode: 'aspect',
+                            frameAlign: 'center',
+                            frameCustomWidthPx: undefined,
+                            frameCustomHeightPx: undefined,
+                          })
+                        }
+                        className="flex items-center gap-1 text-[9px] text-amber-300 hover:text-amber-200 font-semibold"
+                      >
+                        <RotateCcw size={9} />
+                        <span>{t('重置尺寸', 'Reset')}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Frame Width Modes */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('画框宽度', 'Frame Width')}
+                    </label>
+                    <div className="grid grid-cols-4 gap-0.5 bg-zinc-950 p-0.5 rounded border border-zinc-800">
+                      {(
+                        [
+                          { mode: 'full', label: '100%' },
+                          { mode: '75%', label: '75%' },
+                          { mode: '50%', label: '50%' },
+                          { mode: 'custom_px', label: t('自定', 'Custom') },
+                        ] as const
+                      ).map((item) => {
+                        const isSelectedMode =
+                          (selectedImageSlot.frameWidthMode || 'full') === item.mode;
+                        return (
+                          <button
+                            key={item.mode}
+                            type="button"
+                            onClick={() =>
+                              updateImageSlotById(selectedImageSlot.id, {
+                                frameWidthMode: item.mode,
+                                frameCustomWidthPx:
+                                  item.mode === 'custom_px'
+                                    ? selectedImageSlot.frameCustomWidthPx || 320
+                                    : selectedImageSlot.frameCustomWidthPx,
+                              })
+                            }
+                            className={`py-1 rounded text-[10px] font-bold transition-colors ${
+                              isSelectedMode
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-zinc-400 hover:text-zinc-200'
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
                     </div>
 
-                    {/* Layer Toggle: Behind Frame (Default) | Mask Photo | In Front */}
+                    {selectedImageSlot.frameWidthMode === 'custom_px' && (
+                      <div className="mt-2 flex items-center gap-2 bg-zinc-950 p-1.5 rounded border border-zinc-800 text-xs">
+                        <span className="text-[10px] text-zinc-400 shrink-0">W:</span>
+                        <input
+                          type="range"
+                          min={80}
+                          max={800}
+                          step={10}
+                          value={selectedImageSlot.frameCustomWidthPx || 320}
+                          onChange={(e) =>
+                            updateImageSlotById(selectedImageSlot.id, {
+                              frameWidthMode: 'custom_px',
+                              frameCustomWidthPx: Number(e.target.value),
+                            })
+                          }
+                          className="flex-1 h-1.5 bg-zinc-800 rounded accent-blue-500 cursor-pointer"
+                        />
+                        <span className="font-mono text-[10px] text-zinc-200 min-w-[40px] text-right">
+                          {selectedImageSlot.frameCustomWidthPx || 320}px
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Frame Height Mode */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('画框高度', 'Frame Height')}
+                    </label>
+                    <div className="grid grid-cols-2 gap-0.5 bg-zinc-950 p-0.5 rounded border border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            frameHeightMode: 'aspect',
+                          })
+                        }
+                        className={`py-1 rounded text-[10px] font-bold transition-colors ${
+                          (selectedImageSlot.frameHeightMode || 'aspect') === 'aspect'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {t('画幅比例联动', 'By Ratio')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            frameHeightMode: 'custom_px',
+                            frameCustomHeightPx: selectedImageSlot.frameCustomHeightPx || 200,
+                          })
+                        }
+                        className={`py-1 rounded text-[10px] font-bold transition-colors ${
+                          selectedImageSlot.frameHeightMode === 'custom_px'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {t('固定像素高度', 'Fixed (px)')}
+                      </button>
+                    </div>
+
+                    {selectedImageSlot.frameHeightMode === 'custom_px' && (
+                      <div className="mt-2 flex items-center gap-2 bg-zinc-950 p-1.5 rounded border border-zinc-800 text-xs">
+                        <span className="text-[10px] text-zinc-400 shrink-0">H:</span>
+                        <input
+                          type="range"
+                          min={60}
+                          max={600}
+                          step={10}
+                          value={selectedImageSlot.frameCustomHeightPx || 200}
+                          onChange={(e) =>
+                            updateImageSlotById(selectedImageSlot.id, {
+                              frameHeightMode: 'custom_px',
+                              frameCustomHeightPx: Number(e.target.value),
+                            })
+                          }
+                          className="flex-1 h-1.5 bg-zinc-800 rounded accent-blue-500 cursor-pointer"
+                        />
+                        <span className="font-mono text-[10px] text-zinc-200 min-w-[40px] text-right">
+                          {selectedImageSlot.frameCustomHeightPx || 200}px
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Frame Alignment */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('画框对齐方式', 'Alignment')}
+                    </label>
                     <div className="grid grid-cols-3 gap-1">
                       {(
                         [
-                          {
-                            id: 'behind',
-                            zh: '画框后方',
-                            en: 'Behind Frame',
-                          },
-                          {
-                            id: 'mask',
-                            zh: '形状遮罩',
-                            en: 'Shape Mask',
-                          },
-                          {
-                            id: 'front',
-                            zh: '画面前方',
-                            en: 'In Front',
-                          },
+                          { align: 'left', icon: AlignLeft, label: t('居左', 'Left') },
+                          { align: 'center', icon: AlignCenter, label: t('居中', 'Center') },
+                          { align: 'right', icon: AlignRight, label: t('居右', 'Right') },
                         ] as const
-                      ).map((lyr) => (
-                        <button
-                          key={lyr.id}
-                          type="button"
-                          onClick={() =>
-                            updateImageSlotById(selectedImageSlot.id, {
-                              frameAssetLayer: lyr.id,
-                            })
-                          }
-                          className={`py-1 rounded text-[10px] font-semibold border ${
-                            (selectedImageSlot.frameAssetLayer || 'behind') ===
-                            lyr.id
-                              ? 'bg-blue-600 border-blue-400 text-white'
-                              : 'bg-zinc-950 border-zinc-700 text-zinc-400 hover:text-zinc-200'
-                          }`}
-                        >
-                          {t(lyr.zh, lyr.en)}
-                        </button>
-                      ))}
+                      ).map((item) => {
+                        const isSelectedAlign =
+                          (selectedImageSlot.frameAlign || 'center') === item.align;
+                        const IconComp = item.icon;
+                        return (
+                          <button
+                            key={item.align}
+                            type="button"
+                            onClick={() =>
+                              updateImageSlotById(selectedImageSlot.id, {
+                                frameAlign: item.align,
+                              })
+                            }
+                            className={`py-1 flex items-center justify-center gap-1 rounded text-[10px] font-bold border transition-colors ${
+                              isSelectedAlign
+                                ? 'bg-blue-600 border-blue-400 text-white'
+                                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                            }`}
+                          >
+                            <IconComp size={11} />
+                            <span>{item.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-                    {/* Frame Asset Scale Slider */}
+            {/* TAB 2: FRAME PRESETS & STYLING */}
+            {imageSlotTab === 'frame' && (
+              <div className="space-y-3">
+                {/* Quick Frame Presets */}
+                <div>
+                  <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                    {t('画框预设风格', 'Frame Presets')}
+                  </label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(
+                      [
+                        {
+                          zh: '无框',
+                          en: 'None',
+                          patch: {
+                            frameRadius: 4,
+                            frameBorderWidth: 0,
+                            frameMatPadding: 0,
+                            frameShadow: 'none' as const,
+                          },
+                        },
+                        {
+                          zh: '圆角',
+                          en: 'Rounded',
+                          patch: {
+                            frameRadius: 12,
+                            frameBorderWidth: 0,
+                            frameMatPadding: 0,
+                            frameShadow: 'sm' as const,
+                          },
+                        },
+                        {
+                          zh: '拍立得',
+                          en: 'Polaroid',
+                          patch: {
+                            frameRadius: 8,
+                            frameBorderWidth: 1,
+                            frameBorderColor: '#d4d4d8',
+                            frameBorderStyle: 'solid' as const,
+                            frameMatPadding: 6,
+                            frameMatColor: '#ffffff',
+                            frameShadow: 'md' as const,
+                          },
+                        },
+                        {
+                          zh: '邮票虚线',
+                          en: 'Stamp',
+                          patch: {
+                            frameRadius: 6,
+                            frameBorderWidth: 2,
+                            frameBorderColor: '#71717a',
+                            frameBorderStyle: 'dashed' as const,
+                            frameMatPadding: 5,
+                            frameMatColor: '#fafafa',
+                            frameShadow: 'sm' as const,
+                          },
+                        },
+                        {
+                          zh: '古典双线',
+                          en: 'Double',
+                          patch: {
+                            frameRadius: 4,
+                            frameBorderWidth: 4,
+                            frameBorderColor: '#52525b',
+                            frameBorderStyle: 'double' as const,
+                            frameMatPadding: 4,
+                            frameMatColor: '#ffffff',
+                            frameShadow: 'none' as const,
+                          },
+                        },
+                        {
+                          zh: '正圆画框',
+                          en: 'Circle',
+                          patch: {
+                            frameRadius: 999,
+                            frameBorderWidth: 3,
+                            frameBorderColor: '#ffffff',
+                            frameBorderStyle: 'solid' as const,
+                            frameMatPadding: 0,
+                            frameShadow: 'md' as const,
+                          },
+                        },
+                      ]
+                    ).map((preset) => (
+                      <button
+                        key={preset.en}
+                        type="button"
+                        onClick={() =>
+                          updateImageSlotById(selectedImageSlot.id, preset.patch)
+                        }
+                        className="py-1 px-1.5 rounded text-[10px] font-semibold bg-zinc-950 hover:bg-zinc-700 text-zinc-200 border border-zinc-800 transition-colors"
+                      >
+                        {t(preset.zh, preset.en)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Collapsible Details */}
+                <div className="border border-zinc-700/60 rounded-md bg-zinc-950/40 p-2 space-y-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsFrameDetailsOpen(!isFrameDetailsOpen)}
+                    className="w-full flex items-center justify-between text-[11px] font-semibold text-zinc-300 hover:text-white transition-colors"
+                  >
+                    <span>{t('自定义细节调节 (圆角/边框/阴影)', 'Custom Radius, Border & Shadow')}</span>
+                    <span className="text-[10px] text-zinc-500 font-normal">
+                      {isFrameDetailsOpen ? '▾' : '▸'}
+                    </span>
+                  </button>
+
+                  {isFrameDetailsOpen && (
+                    <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
+                      {/* Radius & Mat Padding */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                            {t('圆角', 'Radius')}
+                          </label>
+                          <div className="grid grid-cols-5 gap-0.5">
+                            {[0, 6, 12, 20, 999].map((r) => (
+                              <button
+                                key={r}
+                                type="button"
+                                onClick={() =>
+                                  updateImageSlotById(selectedImageSlot.id, {
+                                    frameRadius: r,
+                                  })
+                                }
+                                className={`py-1 rounded text-[10px] font-bold border ${
+                                  (selectedImageSlot.frameRadius ?? 4) === r
+                                    ? 'bg-zinc-100 text-zinc-900 border-white'
+                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                                }`}
+                              >
+                                {r === 999 ? '●' : r}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                            {t('白边留白', 'Mat Pad')}
+                          </label>
+                          <div className="grid grid-cols-4 gap-0.5">
+                            {[0, 4, 8, 12].map((mp) => (
+                              <button
+                                key={mp}
+                                type="button"
+                                onClick={() =>
+                                  updateImageSlotById(selectedImageSlot.id, {
+                                    frameMatPadding: mp,
+                                  })
+                                }
+                                className={`py-1 rounded text-[10px] font-bold border ${
+                                  (selectedImageSlot.frameMatPadding ?? 0) === mp
+                                    ? 'bg-zinc-100 text-zinc-900 border-white'
+                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                                }`}
+                              >
+                                {mp}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Border Width, Color & Shadow */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                            {t('外框粗细与颜色', 'Border')}
+                          </label>
+                          <div className="flex items-center gap-1">
+                            {[0, 1, 2, 4].map((bw) => (
+                              <button
+                                key={bw}
+                                type="button"
+                                onClick={() =>
+                                  updateImageSlotById(selectedImageSlot.id, {
+                                    frameBorderWidth: bw,
+                                  })
+                                }
+                                className={`flex-1 py-1 rounded text-[10px] font-bold border ${
+                                  (selectedImageSlot.frameBorderWidth ?? 0) === bw
+                                    ? 'bg-zinc-100 text-zinc-900 border-white'
+                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                                }`}
+                              >
+                                {bw}
+                              </button>
+                            ))}
+                            <input
+                              type="color"
+                              value={selectedImageSlot.frameBorderColor || '#d4d4d8'}
+                              onChange={(e) =>
+                                updateImageSlotById(selectedImageSlot.id, {
+                                  frameBorderColor: e.target.value,
+                                })
+                              }
+                              className="w-5 h-5 bg-transparent border-0 cursor-pointer shrink-0"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                            {t('阴影效果', 'Shadow')}
+                          </label>
+                          <div className="grid grid-cols-4 gap-1">
+                            {(
+                              [
+                                { id: 'none', zh: '无', en: '0' },
+                                { id: 'sm', zh: '浅', en: 'S' },
+                                { id: 'md', zh: '深', en: 'M' },
+                                { id: 'hard', zh: '立体', en: '3D' },
+                              ] as const
+                            ).map((sh) => (
+                              <button
+                                key={sh.id}
+                                type="button"
+                                onClick={() =>
+                                  updateImageSlotById(selectedImageSlot.id, {
+                                    frameShadow: sh.id,
+                                  })
+                                }
+                                className={`py-1 rounded text-[10px] font-semibold border ${
+                                  (selectedImageSlot.frameShadow || 'none') === sh.id
+                                    ? 'bg-zinc-100 text-zinc-900 border-white'
+                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                                }`}
+                              >
+                                {t(sh.zh, sh.en)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: IMAGE CROP & OVERLAY */}
+            {imageSlotTab === 'crop' && (
+              <div className="space-y-3">
+                {/* Arrange Picture Inside Frame (Zoom & Pan) */}
+                <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-zinc-200">
+                      {t('框内画面缩放与移动', 'Arrange Picture in Frame')}
+                    </span>
+                    {(selectedImageSlot.zoom !== 1 ||
+                      selectedImageSlot.focalPoint.x !== 50 ||
+                      selectedImageSlot.focalPoint.y !== 50) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            zoom: 1,
+                            focalPoint: { x: 50, y: 50 },
+                          })
+                        }
+                        className="flex items-center gap-1 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
+                      >
+                        <RotateCcw size={10} />
+                        <span>{t('居中复原', 'Reset')}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Zoom Slider */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-zinc-400">
+                      <span>{t('画面缩放 (Zoom)', 'Zoom In / Out')}</span>
+                      <span className="font-mono text-zinc-200">
+                        {Math.round(selectedImageSlot.zoom * 100)}%
+                      </span>
+                    </div>
+                    <RangeSliderWithDefault
+                      min={0.5}
+                      max={2.5}
+                      step={0.05}
+                      value={selectedImageSlot.zoom}
+                      defaultValue={1}
+                      unit="x"
+                      lang={lang}
+                      onChange={(val) =>
+                        updateImageSlotById(selectedImageSlot.id, { zoom: val })
+                      }
+                    />
+                  </div>
+
+                  {/* Pan X & Pan Y */}
+                  <div className="grid grid-cols-2 gap-2.5">
                     <div>
                       <div className="flex justify-between text-[10px] text-zinc-400">
-                        <span>{t('素材大小缩放 (Size)', 'Asset Size (Scale)')}</span>
+                        <span>{t('左右移动 (X)', 'Move Left/Right')}</span>
                         <span className="font-mono text-zinc-200">
-                          {Math.round((selectedImageSlot.frameAssetScale ?? 1) * 100)}%
+                          {selectedImageSlot.focalPoint.x - 50 > 0
+                            ? `+${selectedImageSlot.focalPoint.x - 50}`
+                            : selectedImageSlot.focalPoint.x - 50}
                         </span>
                       </div>
                       <RangeSliderWithDefault
-                        min={0.5}
-                        max={2.5}
-                        step={0.05}
-                        value={selectedImageSlot.frameAssetScale ?? 1}
-                        defaultValue={1}
-                        unit="x"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={selectedImageSlot.focalPoint.x}
+                        defaultValue={50}
+                        unit="%"
                         lang={lang}
                         onChange={(val) =>
                           updateImageSlotById(selectedImageSlot.id, {
-                            frameAssetScale: val,
+                            focalPoint: {
+                              ...selectedImageSlot.focalPoint,
+                              x: Math.round(val),
+                            },
                           })
                         }
                       />
                     </div>
-
-                    {/* Frame Asset X & Y Position Sliders */}
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div>
-                        <div className="flex justify-between text-[10px] text-zinc-400">
-                          <span>{t('左右偏移 (X)', 'Position X')}</span>
-                          <span className="font-mono text-zinc-200">
-                            {(selectedImageSlot.frameAssetX || 0) > 0
-                              ? `+${selectedImageSlot.frameAssetX || 0}%`
-                              : `${selectedImageSlot.frameAssetX || 0}%`}
-                          </span>
-                        </div>
-                        <RangeSliderWithDefault
-                          min={-50}
-                          max={50}
-                          step={1}
-                          value={selectedImageSlot.frameAssetX || 0}
-                          defaultValue={0}
-                          unit="%"
-                          lang={lang}
-                          onChange={(val) =>
-                            updateImageSlotById(selectedImageSlot.id, {
-                              frameAssetX: Math.round(val),
-                            })
-                          }
-                        />
+                    <div>
+                      <div className="flex justify-between text-[10px] text-zinc-400">
+                        <span>{t('上下移动 (Y)', 'Move Up/Down')}</span>
+                        <span className="font-mono text-zinc-200">
+                          {selectedImageSlot.focalPoint.y - 50 > 0
+                            ? `+${selectedImageSlot.focalPoint.y - 50}`
+                            : selectedImageSlot.focalPoint.y - 50}
+                        </span>
                       </div>
+                      <RangeSliderWithDefault
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={selectedImageSlot.focalPoint.y}
+                        defaultValue={50}
+                        unit="%"
+                        lang={lang}
+                        onChange={(val) =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            focalPoint: {
+                              ...selectedImageSlot.focalPoint,
+                              y: Math.round(val),
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-zinc-500">
+                    {t(
+                      '💡 提示：也可直接在画布上拖拽图片位置',
+                      '💡 Tip: Drag image directly on canvas to pan'
+                    )}
+                  </div>
+                </div>
+
+                {/* Decorative Frame Overlay / Sticker */}
+                <div className="space-y-2 pt-1 border-t border-zinc-700/60">
+                  <input
+                    ref={frameOverlayInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadFrameOverlay}
+                    className="hidden"
+                  />
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => frameOverlayInputRef.current?.click()}
+                      className="flex-1 py-1.5 px-2 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 rounded text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                    >
+                      <Upload size={11} />
+                      <span>
+                        {selectedImageSlot.frameOverlayUrl
+                          ? t('更换自定义相框素材', 'Change Frame Asset')
+                          : t('上传相框贴纸素材 (PNG)', 'Upload Frame Sticker')}
+                      </span>
+                    </button>
+                    {selectedImageSlot.frameOverlayUrl && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            frameOverlayUrl: null,
+                            frameAssetScale: 1,
+                            frameAssetX: 0,
+                            frameAssetY: 0,
+                          })
+                        }
+                        className="px-2 py-1 bg-zinc-950 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-[11px]"
+                      >
+                        {t('清除', 'Clear')}
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedImageSlot.frameOverlayUrl && (
+                    <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-amber-300">
+                          {t('相框贴纸图层与位置', 'Frame Layer & Position')}
+                        </span>
+                        {((selectedImageSlot.frameAssetScale ?? 1) !== 1 ||
+                          (selectedImageSlot.frameAssetX || 0) !== 0 ||
+                          (selectedImageSlot.frameAssetY || 0) !== 0) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateImageSlotById(selectedImageSlot.id, {
+                                frameAssetScale: 1,
+                                frameAssetX: 0,
+                                frameAssetY: 0,
+                              })
+                            }
+                            className="flex items-center gap-1 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
+                          >
+                            <RotateCcw size={10} />
+                            <span>{t('重置', 'Reset')}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Layer Toggle */}
+                      <div className="grid grid-cols-3 gap-1">
+                        {(
+                          [
+                            { id: 'behind', zh: '画框后方', en: 'Behind' },
+                            { id: 'mask', zh: '形状遮罩', en: 'Mask' },
+                            { id: 'front', zh: '画面前方', en: 'In Front' },
+                          ] as const
+                        ).map((lyr) => (
+                          <button
+                            key={lyr.id}
+                            type="button"
+                            onClick={() =>
+                              updateImageSlotById(selectedImageSlot.id, {
+                                frameAssetLayer: lyr.id,
+                              })
+                            }
+                            className={`py-1 rounded text-[10px] font-semibold border ${
+                              (selectedImageSlot.frameAssetLayer || 'behind') === lyr.id
+                                ? 'bg-blue-600 border-blue-400 text-white'
+                                : 'bg-zinc-950 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                            }`}
+                          >
+                            {t(lyr.zh, lyr.en)}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Scale */}
                       <div>
                         <div className="flex justify-between text-[10px] text-zinc-400">
-                          <span>{t('上下偏移 (Y)', 'Position Y')}</span>
+                          <span>{t('贴纸缩放 (Scale)', 'Scale')}</span>
                           <span className="font-mono text-zinc-200">
-                            {(selectedImageSlot.frameAssetY || 0) > 0
-                              ? `+${selectedImageSlot.frameAssetY || 0}%`
-                              : `${selectedImageSlot.frameAssetY || 0}%`}
+                            {Math.round((selectedImageSlot.frameAssetScale ?? 1) * 100)}%
                           </span>
                         </div>
                         <RangeSliderWithDefault
-                          min={-50}
-                          max={50}
-                          step={1}
-                          value={selectedImageSlot.frameAssetY || 0}
-                          defaultValue={0}
-                          unit="%"
+                          min={0.5}
+                          max={2.5}
+                          step={0.05}
+                          value={selectedImageSlot.frameAssetScale ?? 1}
+                          defaultValue={1}
+                          unit="x"
                           lang={lang}
                           onChange={(val) =>
                             updateImageSlotById(selectedImageSlot.id, {
-                              frameAssetY: Math.round(val),
+                              frameAssetScale: val,
                             })
                           }
                         />
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         ) : selectedChild && selectedRoot ? (
           /* ========================================================= */
