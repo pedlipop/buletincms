@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 
 // Enable JSON parser with large payload limit for bulletins with media
 app.use(cors());
@@ -19,7 +19,10 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Database initialization
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl =
+  process.env.DATABASE_URL ||
+  process.env.DATABASE_PUBLIC_URL ||
+  process.env.POSTGRES_URL;
 let pool = null;
 let usePostgres = false;
 
@@ -62,51 +65,79 @@ function writeLocalDb(data) {
 
 async function initDatabase() {
   if (databaseUrl) {
-    try {
-      console.log('Connecting to PostgreSQL database provided by Railway...');
-      pool = new Pool({
+    console.log('Detected database URL, establishing connection...');
+    const isInternal =
+      databaseUrl.includes('railway.internal') ||
+      databaseUrl.includes('localhost') ||
+      databaseUrl.includes('127.0.0.1');
+
+    const tryConnect = async (useSsl) => {
+      const testPool = new Pool({
         connectionString: databaseUrl,
-        ssl:
-          databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1')
-            ? false
-            : { rejectUnauthorized: false },
+        ssl: useSsl ? { rejectUnauthorized: false } : false,
         max: 10,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
+        connectionTimeoutMillis: 4000,
       });
+      const client = await testPool.connect();
+      return { testPool, client };
+    };
 
-      // Test connection
-      const client = await pool.connect();
-      console.log('PostgreSQL connected successfully!');
+    let client = null;
+    try {
+      // Attempt 1: preferred mode based on hostname
+      const preferredSsl = !isInternal;
+      console.log(`Connecting to PostgreSQL with SSL=${preferredSsl}...`);
+      const res = await tryConnect(preferredSsl);
+      pool = res.testPool;
+      client = res.client;
+      console.log('PostgreSQL connected successfully on primary attempt!');
+    } catch (err1) {
+      console.warn(`Primary PostgreSQL attempt (SSL=${!isInternal}) failed: ${err1.message}. Retrying with inverted SSL mode...`);
+      try {
+        // Attempt 2: opposite SSL mode
+        const fallbackSsl = isInternal;
+        const res = await tryConnect(fallbackSsl);
+        pool = res.testPool;
+        client = res.client;
+        console.log('PostgreSQL connected successfully on fallback attempt!');
+      } catch (err2) {
+        console.error('All PostgreSQL connection attempts failed, falling back to local file storage:', err2.message);
+        usePostgres = false;
+        initLocalDb();
+        return;
+      }
+    }
 
-      // Create optimized schema
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS bulletins (
-          id VARCHAR(100) PRIMARY KEY,
-          title TEXT NOT NULL,
-          issue_no VARCHAR(50),
-          document_data JSONB NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
+    if (client) {
+      try {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS bulletins (
+            id VARCHAR(100) PRIMARY KEY,
+            title TEXT NOT NULL,
+            issue_no VARCHAR(50),
+            document_data JSONB NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+          );
 
-        CREATE INDEX IF NOT EXISTS idx_bulletins_updated_at ON bulletins(updated_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_bulletins_updated_at ON bulletins(updated_at DESC);
 
-        CREATE TABLE IF NOT EXISTS custom_assets (
-          id VARCHAR(100) PRIMARY KEY,
-          title TEXT,
-          url TEXT NOT NULL,
-          aspect_ratio VARCHAR(20),
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-      client.release();
-      usePostgres = true;
-      console.log('PostgreSQL schema verified and ready.');
-    } catch (err) {
-      console.error('PostgreSQL connection failed, falling back to local file storage:', err.message);
-      usePostgres = false;
-      initLocalDb();
+          CREATE TABLE IF NOT EXISTS custom_assets (
+            id VARCHAR(100) PRIMARY KEY,
+            title TEXT,
+            url TEXT NOT NULL,
+            aspect_ratio VARCHAR(20),
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        usePostgres = true;
+        console.log('PostgreSQL schema verified and ready.');
+      } catch (schemaErr) {
+        console.error('Failed to initialize PostgreSQL schema:', schemaErr);
+      } finally {
+        client.release();
+      }
     }
   } else {
     console.log('No DATABASE_URL found. Using local JSON storage mode.');
@@ -119,11 +150,16 @@ async function initDatabase() {
 // API ROUTES
 // ==========================================
 
-// Healthcheck
+// Healthcheck (Responds with HTTP 200 immediately for Railway)
 app.get('/api/health', (req, res) => {
-  res.json({
+  res.status(200).json({
     status: 'ok',
-    database: usePostgres ? 'postgresql (Railway)' : 'local_json_fallback',
+    port: PORT,
+    database: usePostgres
+      ? 'postgresql (Railway)'
+      : pool
+      ? 'connecting'
+      : 'local_json_fallback',
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });
@@ -317,9 +353,10 @@ if (fs.existsSync(distPath)) {
   });
 }
 
-// Start server
-initDatabase().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`TheBulletin CMS Server running on http://0.0.0.0:${PORT}`);
+// Start server immediately to bind $PORT for Railway deployment health checks
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`TheBulletin CMS Server running on http://0.0.0.0:${PORT}`);
+  initDatabase().catch((err) => {
+    console.error('Background database initialization failed:', err);
   });
 });

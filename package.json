@@ -11,16 +11,6 @@
     "server": "node server.js"
   },
   "dependencies": {
-    "cors": "^2.8.6",
-    "express": "^5.3.0",
-    "lucide-react": "^0.454.0",
-    "modern-screenshot": "^4.6.0",
-    "pg": "^8.23.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "zustand": "^5.0.1"
-  },
-  "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/pg": "^8.23.1",
@@ -28,9 +18,17 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
+    "cors": "^2.8.6",
+    "express": "^5.3.0",
+    "lucide-react": "^0.454.0",
+    "modern-screenshot": "^4.6.0",
+    "pg": "^8.23.1",
     "postcss": "^8.4.47",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tailwindcss": "^3.4.14",
     "typescript": "~5.6.2",
-    "vite": "^5.4.10"
+    "vite": "^5.4.10",
+    "zustand": "^5.0.1"
   }
 }
