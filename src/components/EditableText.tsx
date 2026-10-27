@@ -310,13 +310,24 @@ export const EditableText: React.FC<EditableTextProps> = ({
   };
 
   const Tag = tagName as any;
+  const isNowrap = style?.whiteSpace === 'nowrap';
 
   if (previewMode) {
+    const displayHtml = isNowrap
+      ? value.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '')
+      : value;
+
     return (
       <Tag
-        style={{ whiteSpace: 'pre-wrap', ...style }}
+        style={{
+          whiteSpace: isNowrap ? 'nowrap' : (style?.whiteSpace || 'pre-wrap'),
+          wordBreak: isNowrap ? 'keep-all' : (style?.wordBreak || 'break-word'),
+          overflowWrap: isNowrap ? 'normal' : (style?.overflowWrap || 'break-word'),
+          lineHeight: style?.lineHeight || '1.4',
+          ...style,
+        }}
         className={className}
-        dangerouslySetInnerHTML={{ __html: value }}
+        dangerouslySetInnerHTML={{ __html: displayHtml }}
       />
     );
   }
@@ -346,8 +357,18 @@ export const EditableText: React.FC<EditableTextProps> = ({
           saveSelection();
           updateToolbarPosition();
         }}
+        onPaste={(e: React.ClipboardEvent<HTMLElement>) => {
+          if (isNowrap) {
+            e.preventDefault();
+            const text = e.clipboardData.getData('text/plain').replace(/[\r\n]+/g, ' ');
+            document.execCommand('insertText', false, text);
+          }
+        }}
         onBlur={(e: React.FocusEvent<HTMLElement>) => {
-          const nextHtml = e.currentTarget.innerHTML;
+          let nextHtml = e.currentTarget.innerHTML;
+          if (isNowrap) {
+            nextHtml = nextHtml.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
+          }
           if (nextHtml !== value) {
             onChange(nextHtml);
           }
@@ -364,12 +385,16 @@ export const EditableText: React.FC<EditableTextProps> = ({
           }, 150);
         }}
         onKeyDown={(e: React.KeyboardEvent<HTMLElement>) => {
+          if (isNowrap && e.key === 'Enter') {
+            e.preventDefault();
+            return;
+          }
           e.stopPropagation();
         }}
         style={{
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-          overflowWrap: 'break-word',
+          whiteSpace: isNowrap ? 'nowrap' : 'pre-wrap',
+          wordBreak: isNowrap ? 'keep-all' : 'break-word',
+          overflowWrap: isNowrap ? 'normal' : 'break-word',
           lineHeight: '1.4',
           cursor: 'text',
           outline: isFocused ? '1.5px dashed rgba(37, 99, 235, 0.65)' : undefined,

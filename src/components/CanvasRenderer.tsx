@@ -2036,7 +2036,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
                   style={{
                     backgroundColor: barColor,
                     color: '#ffffff',
-                    padding: '8px 14px',
+                    padding: '6px 12px',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
@@ -2044,27 +2044,29 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
                     fontSize: '11px',
                     fontWeight: 600,
                     lineHeight: '1.4',
-                    gap: '12px',
+                    gap: '8px',
                     overflow: 'visible',
                   }}
                 >
                   <EditableText
+                    tagName="span"
                     value={b.orgNameLeft}
-                    style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4' }}
+                    style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4', wordBreak: 'keep-all' }}
                     onChange={(orgNameLeft) =>
                       updateRootBlock(b.id, (prev) => ({
                         ...prev,
-                        orgNameLeft,
+                        orgNameLeft: orgNameLeft.replace(/<[^>]+>/g, '').trim(),
                       } as MastheadBlock))
                     }
                   />
                   <EditableText
+                    tagName="span"
                     value={b.issueMetaRight}
-                    style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4' }}
+                    style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4', wordBreak: 'keep-all', textAlign: 'right' }}
                     onChange={(issueMetaRight) =>
                       updateRootBlock(b.id, (prev) => ({
                         ...prev,
-                        issueMetaRight,
+                        issueMetaRight: issueMetaRight.replace(/<[^>]+>/g, '').trim(),
                       } as MastheadBlock))
                     }
                   />
@@ -2166,24 +2168,26 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
                     }}
                   >
                     <EditableText
+                      tagName="span"
                       value={b.subBannerLeft}
-                      style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4' }}
+                      style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4', wordBreak: 'keep-all' }}
                       onChange={(subBannerLeft) =>
                         updateRootBlock(b.id, (prev) => ({
                           ...prev,
-                          subBannerLeft,
+                          subBannerLeft: subBannerLeft.replace(/<[^>]+>/g, '').trim(),
                         } as MastheadBlock))
                       }
                     />
                     <EditableText
+                      tagName="span"
                       value={b.subBannerRight}
                       onChange={(subBannerRight) =>
                         updateRootBlock(b.id, (prev) => ({
                           ...prev,
-                          subBannerRight,
+                          subBannerRight: subBannerRight.replace(/<[^>]+>/g, '').trim(),
                         } as MastheadBlock))
                       }
-                      style={{ fontSize: '11px', fontWeight: 600, opacity: 0.92, whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4' }}
+                      style={{ fontSize: '11px', fontWeight: 600, opacity: 0.92, whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4', wordBreak: 'keep-all', textAlign: 'right' }}
                     />
                   </div>
                   {b.showSubBannerDesc !== false && (
@@ -3066,7 +3070,9 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
           minHeight: doc.rootBlocks.length === 0 ? '560px' : undefined,
           backgroundColor: '#ffffff',
           color: '#18181b',
-          fontFamily: doc.fontFamily || 'inherit',
+          fontFamily:
+            doc.fontFamily ||
+            "'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif",
           boxShadow: '0 20px 50px rgba(0, 0, 0, 0.45)',
           position: 'relative',
           display: 'flex',

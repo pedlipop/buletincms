@@ -337,6 +337,14 @@ export const App: React.FC = () => {
       const dataUrl = await domToPng(exportCanvasRef.current, {
         scale: 2,
         backgroundColor: '#ffffff',
+        width: doc.canvasWidth,
+        style: {
+          transform: 'none',
+          margin: '0',
+          fontFamily:
+            doc.fontFamily ||
+            "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Inter', sans-serif",
+        },
       });
 
       const link = document.createElement('a');
@@ -369,12 +377,20 @@ export const App: React.FC = () => {
       setPreviewMode(true);
       setZoomPercent(100);
       await document.fonts?.ready;
-      await new Promise((r) => setTimeout(r, 260));
+      await new Promise((r) => setTimeout(r, 280));
 
       // Scale: 3 generates razor-sharp 300+ DPI bitmap render
       const canvas = await domToCanvas(exportCanvasRef.current, {
         scale: 3,
         backgroundColor: '#ffffff',
+        width: doc.canvasWidth,
+        style: {
+          transform: 'none',
+          margin: '0',
+          fontFamily:
+            doc.fontFamily ||
+            "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Inter', sans-serif",
+        },
       });
 
       const pdfBlob = buildSinglePagePdfFromCanvas(canvas, 3);

@@ -427,9 +427,23 @@ const loadInitialState = () => {
         // Auto-upgrade empty placeholder slots with demo photos for optimal display
         docs.forEach((doc) => {
           doc.rootBlocks.forEach((rb) => {
-            if (rb.type === 'masthead' && !rb.heroImage.url) {
-              rb.heroImage.url = '/demo/hero_industrial_park.jpg';
-              rb.heroImage.label = '莫罗瓦利产业基地全景';
+            if (rb.type === 'masthead') {
+              if (!rb.heroImage.url) {
+                rb.heroImage.url = '/demo/hero_industrial_park.jpg';
+                rb.heroImage.label = '莫罗瓦利产业基地全景';
+              }
+              if (rb.orgNameLeft) {
+                rb.orgNameLeft = rb.orgNameLeft.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
+              }
+              if (rb.issueMetaRight) {
+                rb.issueMetaRight = rb.issueMetaRight.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
+              }
+              if (rb.subBannerLeft) {
+                rb.subBannerLeft = rb.subBannerLeft.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
+              }
+              if (rb.subBannerRight) {
+                rb.subBannerRight = rb.subBannerRight.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
+              }
             }
             if (rb.type === 'section_container') {
               rb.children.forEach((cb) => {
