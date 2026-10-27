@@ -239,6 +239,7 @@ interface BulletinState {
   importDocumentJson: (doc: BulletinDocument) => void;
   switchDocument: (docId: string) => void;
   deleteDocument: (docId: string) => void;
+  syncRemoteDatabase: () => Promise<void>;
 }
 
 const CUSTOM_ASSETS_KEY = 'buletincms_custom_assets_v1';
@@ -319,9 +320,33 @@ const loadCustomAssets = (docs: BulletinDocument[]): CustomAssetItem[] => {
 const persistCustomAssets = (assets: CustomAssetItem[]) => {
   try {
     localStorage.setItem(CUSTOM_ASSETS_KEY, JSON.stringify(assets));
+    if (typeof window !== 'undefined') {
+      fetch('/api/custom-assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assets),
+      }).catch(() => {});
+    }
   } catch (e) {
     console.warn('Could not persist custom assets to localStorage:', e);
   }
+};
+
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+const syncDocToBackend = (doc: BulletinDocument) => {
+  if (typeof window === 'undefined') return;
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(async () => {
+    try {
+      await fetch('/api/bulletins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(doc),
+      });
+    } catch {
+      // Quiet fail if backend is unreachable
+    }
+  }, 1000);
 };
 
 const loadInitialState = () => {
@@ -396,6 +421,10 @@ const persistState = (
       STORAGE_KEY,
       JSON.stringify({ documents, activeDocId, savedTemplates })
     );
+    const activeDoc = documents.find((d) => d.id === activeDocId) || documents[0];
+    if (activeDoc) {
+      syncDocToBackend(activeDoc);
+    }
   } catch (e) {
     console.warn('Could not persist state to localStorage:', e);
   }
@@ -1359,12 +1388,66 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
       const nextActiveId =
         state.activeDocId === docId ? nextDocs[0].id : state.activeDocId;
       persistState(nextDocs, nextActiveId, state.savedTemplates);
+      if (typeof window !== 'undefined') {
+        fetch(`/api/bulletins/${docId}`, { method: 'DELETE' }).catch(() => {});
+      }
       set({
         documents: nextDocs,
         activeDocId: nextActiveId,
         past: [],
         future: [],
       });
+    },
+
+    syncRemoteDatabase: async () => {
+      if (typeof window === 'undefined') return;
+      try {
+        const res = await fetch('/api/bulletins');
+        if (!res.ok) return;
+        const remoteList: Array<{ id: string; title: string; updatedAt: string }> = await res.json();
+        if (!Array.isArray(remoteList) || remoteList.length === 0) {
+          // If remote database is empty, push the local active document
+          const localActive = get().getActiveDoc();
+          if (localActive) {
+            syncDocToBackend(localActive);
+          }
+          return;
+        }
+
+        // Fetch documents from remote database
+        const remoteDocs: BulletinDocument[] = [];
+        for (const item of remoteList) {
+          try {
+            const docRes = await fetch(`/api/bulletins/${item.id}`);
+            if (docRes.ok) {
+              const fullDoc = await docRes.json();
+              if (fullDoc && fullDoc.id && Array.isArray(fullDoc.rootBlocks)) {
+                remoteDocs.push(fullDoc);
+              }
+            }
+          } catch {
+            // ignore individual doc fetch failure
+          }
+        }
+
+        if (remoteDocs.length > 0) {
+          const currentDocs = get().documents;
+          const map = new Map<string, BulletinDocument>();
+          currentDocs.forEach((d) => map.set(d.id, d));
+          remoteDocs.forEach((rd) => {
+            const existing = map.get(rd.id);
+            if (!existing || new Date(rd.updatedAt).getTime() >= new Date(existing.updatedAt).getTime()) {
+              map.set(rd.id, rd);
+            }
+          });
+          const merged = Array.from(map.values());
+          merged.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+          set({ documents: merged });
+          persistState(merged, get().activeDocId, get().savedTemplates);
+        }
+      } catch {
+        // Quiet fail if backend server is not running
+      }
     },
   };
 });

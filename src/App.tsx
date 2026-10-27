@@ -176,6 +176,12 @@ export const App: React.FC = () => {
   const selectBlock = useBulletinStore((s) => s.selectBlock);
   const updateDocumentMeta = useBulletinStore((s) => s.updateDocumentMeta);
   const toggleDocumentStatus = useBulletinStore((s) => s.toggleDocumentStatus);
+  const syncRemoteDatabase = useBulletinStore((s) => s.syncRemoteDatabase);
+
+  // Initial sync with Railway PostgreSQL / backend database on startup
+  useEffect(() => {
+    syncRemoteDatabase();
+  }, [syncRemoteDatabase]);
 
   // Global keyboard shortcuts for Undo / Redo in Editor
   useEffect(() => {
