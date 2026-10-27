@@ -22,6 +22,8 @@ import {
   RotateCcw,
   ZoomIn,
   ZoomOut,
+  GripVertical,
+  X,
 } from 'lucide-react';
 import { domToCanvas, domToPng } from 'modern-screenshot';
 import { CanvasRenderer } from './components/CanvasRenderer';
@@ -181,8 +183,35 @@ export const App: React.FC = () => {
   const syncRemoteDatabase = useBulletinStore((s) => s.syncRemoteDatabase);
 
   const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false);
+  const [zoomBarPos, setZoomBarPos] = useState<{ x: number; y: number } | null>(null);
+  const [isZoomBarVisible, setIsZoomBarVisible] = useState(true);
   const mainCanvasRef = useRef<HTMLElement | null>(null);
   const zoomMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const handleDragZoomBar = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialRect = zoomMenuRef.current?.getBoundingClientRect();
+    const startLeft = initialRect ? initialRect.left : window.innerWidth - 260;
+    const startTop = initialRect ? initialRect.top : window.innerHeight - 70;
+
+    const onMove = (moveEv: MouseEvent) => {
+      const dx = moveEv.clientX - startX;
+      const dy = moveEv.clientY - startY;
+      setZoomBarPos({
+        x: Math.max(10, Math.min(window.innerWidth - 220, startLeft + dx)),
+        y: Math.max(50, Math.min(window.innerHeight - 50, startTop + dy)),
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   // Close zoom presets menu on outside click
   useEffect(() => {
@@ -754,114 +783,148 @@ export const App: React.FC = () => {
             <CanvasRenderer exportRef={exportCanvasRef} />
           </div>
 
-          {/* Floating On-Canvas Zoom & Viewport Bar */}
-          <div
-            ref={zoomMenuRef}
-            className="fixed md:absolute bottom-16 md:bottom-5 left-4 md:left-auto md:right-5 z-30 flex items-center gap-0.5 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-lg p-1 shadow-2xl text-xs select-none"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Fit to Screen */}
-            <button
-              type="button"
-              onClick={handleFitToScreen}
-              className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded transition-colors"
-              title={t('自适应画布宽度 (Fit Width)', 'Fit Canvas Width to Screen')}
+          {/* Floating On-Canvas Zoom & Viewport Bar (Freely Draggable & Dismissable) */}
+          {isZoomBarVisible && (
+            <div
+              ref={zoomMenuRef}
+              style={
+                zoomBarPos
+                  ? {
+                      position: 'fixed',
+                      left: `${zoomBarPos.x}px`,
+                      top: `${zoomBarPos.y}px`,
+                      bottom: 'auto',
+                      right: 'auto',
+                    }
+                  : undefined
+              }
+              className={`fixed ${
+                zoomBarPos ? '' : 'md:absolute bottom-16 md:bottom-5 left-4 md:left-auto md:right-5'
+              } z-30 flex items-center gap-0.5 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-lg p-1 shadow-2xl text-xs select-none`}
+              onClick={(e) => e.stopPropagation()}
             >
-              <Maximize2 size={13} />
-            </button>
+              {/* Drag Handle */}
+              <div
+                onMouseDown={handleDragZoomBar}
+                className="p-1 cursor-grab active:cursor-grabbing text-zinc-500 hover:text-zinc-300 transition-colors"
+                title={t('按住拖拽移动此缩放工具栏位置', 'Drag to reposition toolbar anywhere')}
+              >
+                <GripVertical size={12} />
+              </div>
 
-            <div className="w-px h-4 bg-zinc-700 my-auto mx-0.5" />
-
-            {/* Zoom Out */}
-            <button
-              type="button"
-              onClick={() => setZoomPercent(zoomPercent - 10)}
-              disabled={zoomPercent <= 25}
-              className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 disabled:opacity-30 rounded transition-colors"
-              title={t('缩小画布 (Ctrl -)', 'Zoom Out Canvas (Ctrl -)')}
-            >
-              <ZoomOut size={13} />
-            </button>
-
-            {/* Zoom Percentage / Presets Menu */}
-            <div className="relative">
+              {/* Fit to Screen */}
               <button
                 type="button"
-                onClick={() => setIsZoomMenuOpen(!isZoomMenuOpen)}
-                className="px-2 py-1 font-mono text-[11px] font-bold text-zinc-200 hover:bg-zinc-800 rounded flex items-center gap-1 transition-colors"
-                title={t('点击选择缩放比例', 'Select Zoom Level')}
+                onClick={handleFitToScreen}
+                className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+                title={t('自适应画布宽度 (Fit Width)', 'Fit Canvas Width to Screen')}
               >
-                <span>{zoomPercent}%</span>
-                <ChevronDown size={10} className="text-zinc-400" />
+                <Maximize2 size={13} />
               </button>
 
-              {isZoomMenuOpen && (
-                <div
-                  className="absolute bottom-full left-0 md:left-auto md:right-0 mb-2 w-36 bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-lg shadow-2xl py-1 text-xs z-50 animate-in fade-in zoom-in-95 duration-100"
-                  onClick={() => setIsZoomMenuOpen(false)}
+              <div className="w-px h-4 bg-zinc-700 my-auto mx-0.5" />
+
+              {/* Zoom Out */}
+              <button
+                type="button"
+                onClick={() => setZoomPercent(zoomPercent - 10)}
+                disabled={zoomPercent <= 25}
+                className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 disabled:opacity-30 rounded transition-colors"
+                title={t('缩小画布 (Ctrl -)', 'Zoom Out Canvas (Ctrl -)')}
+              >
+                <ZoomOut size={13} />
+              </button>
+
+              {/* Zoom Percentage / Presets Menu */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsZoomMenuOpen(!isZoomMenuOpen)}
+                  className="px-2 py-1 font-mono text-[11px] font-bold text-zinc-200 hover:bg-zinc-800 rounded flex items-center gap-1 transition-colors"
+                  title={t('点击选择缩放比例', 'Select Zoom Level')}
                 >
-                  <div className="px-2.5 py-1 text-[9px] font-bold text-zinc-500 uppercase tracking-wider">
-                    {t('画布缩放视图', 'Canvas Zoom')}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleFitToScreen}
-                    className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-800 flex items-center justify-between text-blue-400 font-semibold"
+                  <span>{zoomPercent}%</span>
+                  <ChevronDown size={10} className="text-zinc-400" />
+                </button>
+
+                {isZoomMenuOpen && (
+                  <div
+                    className="absolute bottom-full left-0 md:left-auto md:right-0 mb-2 w-36 bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-lg shadow-2xl py-1 text-xs z-50 animate-in fade-in zoom-in-95 duration-100"
+                    onClick={() => setIsZoomMenuOpen(false)}
                   >
-                    <span>{t('自适应屏幕', 'Fit Screen')}</span>
-                    <Maximize2 size={11} />
-                  </button>
-                  <div className="h-px bg-zinc-800 my-1" />
-                  {[50, 75, 100, 125, 150, 200].map((z) => (
+                    <div className="px-2.5 py-1 text-[9px] font-bold text-zinc-500 uppercase tracking-wider">
+                      {t('画布缩放视图', 'Canvas Zoom')}
+                    </div>
                     <button
-                      key={z}
                       type="button"
-                      onClick={() => setZoomPercent(z)}
-                      className={`w-full text-left px-2.5 py-1 hover:bg-zinc-800 flex items-center justify-between font-mono text-[11px] ${
-                        zoomPercent === z
-                          ? 'text-white font-bold bg-blue-600/30'
-                          : 'text-zinc-300'
-                      }`}
+                      onClick={handleFitToScreen}
+                      className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-800 flex items-center justify-between text-blue-400 font-semibold"
                     >
-                      <span>{z}%</span>
-                      {z === 100 && (
-                        <span className="text-[9px] text-zinc-400 font-sans">
-                          {t('实际', '1:1')}
-                        </span>
-                      )}
+                      <span>{t('自适应屏幕', 'Fit Screen')}</span>
+                      <Maximize2 size={11} />
                     </button>
-                  ))}
-                  <div className="h-px bg-zinc-800 my-1" />
-                  <div className="px-2.5 py-1 text-[9px] text-zinc-500 leading-tight">
-                    {t('按住 Ctrl + 滚轮也可缩放画布', 'Ctrl + Wheel to zoom canvas')}
+                    <div className="h-px bg-zinc-800 my-1" />
+                    {[50, 75, 100, 125, 150, 200].map((z) => (
+                      <button
+                        key={z}
+                        type="button"
+                        onClick={() => setZoomPercent(z)}
+                        className={`w-full text-left px-2.5 py-1 hover:bg-zinc-800 flex items-center justify-between font-mono text-[11px] ${
+                          zoomPercent === z
+                            ? 'text-white font-bold bg-blue-600/30'
+                            : 'text-zinc-300'
+                        }`}
+                      >
+                        <span>{z}%</span>
+                        {z === 100 && (
+                          <span className="text-[9px] text-zinc-400 font-sans">
+                            {t('实际', '1:1')}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                    <div className="h-px bg-zinc-800 my-1" />
+                    <div className="px-2.5 py-1 text-[9px] text-zinc-500 leading-tight">
+                      {t('按住 Ctrl + 滚轮也可缩放画布', 'Ctrl + Wheel to zoom canvas')}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
 
-            {/* Zoom In */}
-            <button
-              type="button"
-              onClick={() => setZoomPercent(zoomPercent + 10)}
-              disabled={zoomPercent >= 250}
-              className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 disabled:opacity-30 rounded transition-colors"
-              title={t('放大画布 (Ctrl +)', 'Zoom In Canvas (Ctrl +)')}
-            >
-              <ZoomIn size={13} />
-            </button>
-
-            {/* Reset to 100% */}
-            {zoomPercent !== 100 && (
+              {/* Zoom In */}
               <button
                 type="button"
-                onClick={() => setZoomPercent(100)}
-                className="p-1.5 text-amber-300 hover:text-amber-200 hover:bg-zinc-800 rounded transition-colors"
-                title={t('重置为 100% 实际大小', 'Reset to 100%')}
+                onClick={() => setZoomPercent(zoomPercent + 10)}
+                disabled={zoomPercent >= 250}
+                className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 disabled:opacity-30 rounded transition-colors"
+                title={t('放大画布 (Ctrl +)', 'Zoom In Canvas (Ctrl +)')}
               >
-                <RotateCcw size={12} />
+                <ZoomIn size={13} />
               </button>
-            )}
-          </div>
+
+              {/* Reset to 100% */}
+              {zoomPercent !== 100 && (
+                <button
+                  type="button"
+                  onClick={() => setZoomPercent(100)}
+                  className="p-1.5 text-amber-300 hover:text-amber-200 hover:bg-zinc-800 rounded transition-colors"
+                  title={t('重置为 100% 实际大小', 'Reset to 100%')}
+                >
+                  <RotateCcw size={12} />
+                </button>
+              )}
+
+              {/* Close / Hide floating bar */}
+              <button
+                type="button"
+                onClick={() => setIsZoomBarVisible(false)}
+                className="p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors ml-0.5"
+                title={t('关闭浮动缩放栏 (顶部导航栏仍保留缩放功能)', 'Hide floating zoom bar (top bar has zoom too)')}
+              >
+                <X size={11} />
+              </button>
+            </div>
+          )}
 
           {/* Floating Pill on mobile when a block is selected to jump to inspector */}
           {!previewMode && (selectedRootId || selectedChildId) && (
