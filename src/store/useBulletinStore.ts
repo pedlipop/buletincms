@@ -219,6 +219,12 @@ interface BulletinState {
   previewMode: boolean;
   zoomPercent: number;
 
+  isDrawerCollapsed: boolean;
+  setIsDrawerCollapsed: (collapsed: boolean) => void;
+  activeLibraryTab: 'blocks' | 'assets' | 'templates';
+  setActiveLibraryTab: (tab: 'blocks' | 'assets' | 'templates') => void;
+  openBlocksDrawer: () => void;
+
   // Active Drag Payload
   activeDrag: DragPayload | null;
   setActiveDrag: (payload: DragPayload | null) => void;
@@ -633,6 +639,11 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
     selectedImageSlotId: null,
     previewMode: false,
     zoomPercent: 100,
+    isDrawerCollapsed: false,
+    setIsDrawerCollapsed: (collapsed) => set({ isDrawerCollapsed: collapsed }),
+    activeLibraryTab: 'blocks',
+    setActiveLibraryTab: (tab) => set({ activeLibraryTab: tab, isDrawerCollapsed: false }),
+    openBlocksDrawer: () => set({ isDrawerCollapsed: false, activeLibraryTab: 'blocks' }),
     activeDrag: null,
 
     setActiveDrag: (payload) => set({ activeDrag: payload }),

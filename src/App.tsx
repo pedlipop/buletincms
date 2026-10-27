@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { domToCanvas, domToPng } from 'modern-screenshot';
 import { CanvasRenderer } from './components/CanvasRenderer';
+import { FloatingContainerBar } from './components/FloatingContainerBar';
 import { HomeDashboard } from './components/HomeDashboard';
 import { LeftLibrary } from './components/LeftLibrary';
 import { RightInspector } from './components/RightInspector';
@@ -823,6 +824,9 @@ export const App: React.FC = () => {
           <div className="h-fit pb-24 md:pb-20 flex justify-center">
             <CanvasRenderer exportRef={exportCanvasRef} />
           </div>
+
+          {/* Floating Bottom Quick Containers Toolbar (3 options + Library Button) */}
+          <FloatingContainerBar onOpenLibraryTab={() => setMobileTab('library')} />
 
           {/* Floating On-Canvas Zoom & Viewport Bar (Freely Draggable & Dismissable) */}
           {isZoomBarVisible && (

@@ -46,10 +46,10 @@ interface PendingAssetItem {
 }
 
 export const LeftLibrary: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'blocks' | 'assets' | 'templates'>(
-    'blocks'
-  );
-  const [isDrawerCollapsed, setIsDrawerCollapsed] = useState(false);
+  const activeTab = useBulletinStore((s) => s.activeLibraryTab);
+  const setActiveTab = useBulletinStore((s) => s.setActiveLibraryTab);
+  const isDrawerCollapsed = useBulletinStore((s) => s.isDrawerCollapsed);
+  const setIsDrawerCollapsed = useBulletinStore((s) => s.setIsDrawerCollapsed);
   const [collapsedSections, setCollapsedSections] = useState<{
     containers: boolean;
     columns: boolean;
