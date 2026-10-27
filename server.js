@@ -264,6 +264,23 @@ app.post('/api/bulletins', async (req, res) => {
   }
 });
 
+// Delete all bulletins
+app.delete('/api/bulletins', async (req, res) => {
+  try {
+    if (usePostgres) {
+      await pool.query('DELETE FROM bulletins;');
+    } else {
+      const db = readLocalDb();
+      db.bulletins = {};
+      writeLocalDb(db);
+    }
+    return res.json({ success: true, count: 0 });
+  } catch (err) {
+    console.error('Failed to delete all bulletins:', err);
+    res.status(500).json({ error: 'Failed to delete all bulletins' });
+  }
+});
+
 // Delete bulletin
 app.delete('/api/bulletins/:id', async (req, res) => {
   try {

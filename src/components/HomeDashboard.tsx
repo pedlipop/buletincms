@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowRight,
   Bookmark,
   CheckCircle2,
@@ -9,6 +10,7 @@ import {
   FileJson,
   FilePlus2,
   FolderKanban,
+  FolderPlus,
   Plus,
   Search,
   Sparkles,
@@ -29,6 +31,8 @@ export const HomeDashboard: React.FC = () => {
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editIssue, setEditIssue] = useState('');
+  const [confirmDeleteAllOpen, setConfirmDeleteAllOpen] = useState(false);
+  const [confirmDeleteDoc, setConfirmDeleteDoc] = useState<BulletinDocument | null>(null);
 
   const lang = useBulletinStore((s) => s.lang);
   const setLang = useBulletinStore((s) => s.setLang);
@@ -44,6 +48,7 @@ export const HomeDashboard: React.FC = () => {
   const toggleDocumentStatus = useBulletinStore((s) => s.toggleDocumentStatus);
   const renameDocument = useBulletinStore((s) => s.renameDocument);
   const deleteDocument = useBulletinStore((s) => s.deleteDocument);
+  const deleteAllDocuments = useBulletinStore((s) => s.deleteAllDocuments);
   const importDocumentJson = useBulletinStore((s) => s.importDocumentJson);
   const deleteTemplate = useBulletinStore((s) => s.deleteTemplate);
   const setCurrentView = useBulletinStore((s) => s.setCurrentView);
@@ -278,10 +283,16 @@ export const HomeDashboard: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setCurrentView('editor')}
+            onClick={() => {
+              if (documents.length === 0) {
+                createNewDocument('blank', true);
+              } else {
+                setCurrentView('editor');
+              }
+            }}
             className="px-3 sm:px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
           >
-            <span>{t('继续编辑', 'Continue')}</span>
+            <span>{documents.length === 0 ? t('新建简报', 'New Bulletin') : t('继续编辑', 'Continue')}</span>
             <ArrowRight size={13} />
           </button>
         </div>
@@ -323,34 +334,57 @@ export const HomeDashboard: React.FC = () => {
               </div>
             </button>
 
-            {/* Starter 3: Clone Latest Issue */}
-            <button
-              type="button"
-              onClick={() => createNewDocument('clone_current', true)}
-              className="group bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-zinc-500 rounded-xl p-4 text-left transition-all flex items-start gap-4 shadow-sm card-lift btn-press"
-            >
-              <div className="w-11 h-11 rounded-lg bg-zinc-800 group-hover:bg-zinc-700 border border-zinc-700 flex items-center justify-center shrink-0 text-zinc-100 group-hover:scale-110 transition-transform">
-                <FilePlus2 size={20} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-white group-hover:text-blue-300 transition-colors">
-                  {t('克隆当前期简报', 'Clone Current Issue')}
+            {/* Starter 2: Standard Demo or Clone Current Issue */}
+            {documents.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => createNewDocument('clone_current', true)}
+                className="group bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-zinc-500 rounded-xl p-4 text-left transition-all flex items-start gap-4 shadow-sm card-lift btn-press"
+              >
+                <div className="w-11 h-11 rounded-lg bg-zinc-800 group-hover:bg-zinc-700 border border-zinc-700 flex items-center justify-center shrink-0 text-zinc-100 group-hover:scale-110 transition-transform">
+                  <FilePlus2 size={20} />
                 </div>
-                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                  {t(
-                    '一键复制最近一期的版式、配色与模块结构，只需替换当月照片与文字即可出图。',
-                    'Duplicate the active bulletin layout and theme to quickly produce the next issue.'
-                  )}
-                </p>
-              </div>
-            </button>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-white group-hover:text-blue-300 transition-colors">
+                    {t('克隆当前期简报', 'Clone Current Issue')}
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                    {t(
+                      '一键复制最近一期的版式、配色与模块结构，只需替换当月照片与文字即可出图。',
+                      'Duplicate the active bulletin layout and theme to quickly produce the next issue.'
+                    )}
+                  </p>
+                </div>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => resetToDemoBulletin()}
+                className="group bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-amber-500/50 rounded-xl p-4 text-left transition-all flex items-start gap-4 shadow-sm card-lift btn-press"
+              >
+                <div className="w-11 h-11 rounded-lg bg-amber-950/40 group-hover:bg-amber-900/50 border border-amber-600/40 flex items-center justify-center shrink-0 text-amber-300 group-hover:scale-110 transition-transform">
+                  <Sparkles size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors">
+                    {t('载入官方标准示范简报', 'Load Official Demo Bulletin')}
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                    {t(
+                      '包含报头大图、关键指标胶囊、带图时间线与双列图文卡片的专业产业示范排版。',
+                      'Includes masthead, highlights bar, timeline events, and dual column cards.'
+                    )}
+                  </p>
+                </div>
+              </button>
+            )}
           </div>
         </section>
 
         {/* SECTION 2: ALL BULLETINS LIBRARY */}
         <section className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <FolderKanban size={16} className="text-blue-400" />
                 <span>{t('我的简报作品库', 'My Bulletin Library')}</span>
@@ -359,59 +393,144 @@ export const HomeDashboard: React.FC = () => {
                 </span>
               </h2>
 
+              {/* Clear / Delete All Button */}
+              {documents.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteAllOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-zinc-400 hover:text-red-400 hover:bg-red-500/10 border border-zinc-800 hover:border-red-500/30 rounded-lg transition-colors cursor-pointer"
+                  title={t('清空全部简报', 'Delete all bulletins')}
+                >
+                  <Trash2 size={12} />
+                  <span>{t('清空全部作品', 'Delete All')}</span>
+                </button>
+              )}
+
               {/* Filter Pills */}
-              <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 text-xs">
-                {(
-                  [
-                    { id: 'all', zh: '全部', en: 'All' },
-                    { id: 'draft', zh: '草稿箱', en: 'Drafts' },
-                    { id: 'published', zh: '已定稿', en: 'Published' },
-                  ] as const
-                ).map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setStatusFilter(tab.id)}
-                    className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
-                      statusFilter === tab.id
-                        ? 'bg-zinc-800 text-white'
-                        : 'text-zinc-400 hover:text-zinc-200'
-                    }`}
-                  >
-                    {t(tab.zh, tab.en)}
-                  </button>
-                ))}
-              </div>
+              {documents.length > 0 && (
+                <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 text-xs">
+                  {(
+                    [
+                      { id: 'all', zh: '全部', en: 'All' },
+                      { id: 'draft', zh: '草稿箱', en: 'Drafts' },
+                      { id: 'published', zh: '已定稿', en: 'Published' },
+                    ] as const
+                  ).map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setStatusFilter(tab.id)}
+                      className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                        statusFilter === tab.id
+                          ? 'bg-zinc-800 text-white'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {t(tab.zh, tab.en)}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Search Input */}
-            <div className="relative w-full sm:w-64">
-              <Search
-                size={13}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
-              />
-              <input
-                type="text"
-                placeholder={t('搜索简报标题或期号...', 'Search title or issue...')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none"
-              />
-            </div>
+            {documents.length > 0 && (
+              <div className="relative w-full sm:w-64">
+                <Search
+                  size={13}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+                />
+                <input
+                  type="text"
+                  placeholder={t('搜索简报标题或期号...', 'Search title or issue...')}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-zinc-600 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 outline-none"
+                />
+              </div>
+            )}
           </div>
 
-          {/* Bulletin Cards Grid */}
-          {filteredDocs.length === 0 ? (
-            <div className="bg-zinc-900/40 border border-dashed border-zinc-800 rounded-xl py-16 text-center space-y-2">
+          {/* Bulletin Cards Grid or Hero Empty State */}
+          {documents.length === 0 ? (
+            /* HERO EMPTY STATE */
+            <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-zinc-900/90 via-zinc-900/50 to-zinc-950 p-8 sm:p-14 text-center shadow-2xl backdrop-blur-sm transition-all">
+              {/* Subtle radiant background glow */}
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="h-64 w-96 rounded-full bg-blue-600/10 blur-3xl" />
+                <div className="h-40 w-40 rounded-full bg-indigo-500/10 blur-2xl" />
+              </div>
+
+              <div className="relative z-10 flex flex-col items-center max-w-lg mx-auto">
+                {/* Glowing Icon Badge */}
+                <div className="relative mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600/20 via-blue-500/10 to-indigo-600/20 border border-blue-500/30 shadow-[0_0_35px_rgba(37,99,235,0.25)]">
+                  <FolderPlus className="text-blue-400" size={38} strokeWidth={1.75} />
+                </div>
+
+                {/* Hero Headings */}
+                <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-2.5">
+                  {t('还没有任何简报作品', 'No Bulletins Yet')}
+                </h3>
+                <p className="text-sm text-zinc-400 mb-8 leading-relaxed max-w-md">
+                  {t(
+                    '作品库当前已完全清空。立即点击下方按钮创建第一份专属简报，或一键载入官方示范工程体验自由排版！',
+                    'Your bulletin library is empty. Click below to create your first bulletin, or load the official demo project.'
+                  )}
+                </p>
+
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-center gap-3.5 w-full justify-center">
+                  <button
+                    type="button"
+                    onClick={() => createNewDocument('blank', true)}
+                    className="w-full sm:w-auto px-7 py-3.5 bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm rounded-xl shadow-[0_0_25px_rgba(37,99,235,0.45)] hover:shadow-[0_0_35px_rgba(37,99,235,0.65)] flex items-center justify-center gap-2.5 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                  >
+                    <Plus size={18} strokeWidth={2.5} />
+                    <span>{t('新建空白简报', 'Create New Bulletin')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => resetToDemoBulletin()}
+                    className="w-full sm:w-auto px-5 py-3.5 bg-zinc-800/90 hover:bg-zinc-750 text-zinc-200 hover:text-white border border-zinc-700/80 font-semibold text-sm rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:border-zinc-600"
+                  >
+                    <Sparkles size={16} className="text-amber-400" />
+                    <span>{t('载入示范工程', 'Load Demo Bulletin')}</span>
+                  </button>
+                </div>
+
+                {/* Auxiliary Import Link */}
+                <div className="mt-6 flex items-center gap-2 text-xs text-zinc-500">
+                  <span>{t('或者：', 'or:')}</span>
+                  <button
+                    type="button"
+                    onClick={() => jsonInputRef.current?.click()}
+                    className="text-zinc-400 hover:text-zinc-200 underline underline-offset-4 flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <Upload size={12} />
+                    <span>{t('从 JSON 备份文件导入', 'Import from JSON file')}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : filteredDocs.length === 0 ? (
+            <div className="bg-zinc-900/40 border border-dashed border-zinc-800 rounded-xl py-16 text-center space-y-3">
               <p className="text-sm text-zinc-400 font-semibold">
                 {t('没有找到匹配的简报文档', 'No matching bulletins found')}
               </p>
               <p className="text-xs text-zinc-500">
-                {t(
-                  '点击上方卡片新建简报，或清除搜索筛选条件',
-                  'Create a new bulletin above or clear your search filter'
-                )}
+                {t('清除搜索或筛选条件以查看全部简报', 'Clear your search or filter to see all bulletins')}
               </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                }}
+                className="mt-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <span>{t('重置搜索与筛选', 'Reset Search & Filter')}</span>
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -582,21 +701,7 @@ export const HomeDashboard: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              const confirmMsg =
-                                documents.length <= 1
-                                  ? t(
-                                      `确定要删除《${doc.title}》并重置为全新官方示范工程吗？`,
-                                      `Delete "${doc.title}" and reset to clean official template?`
-                                    )
-                                  : t(
-                                      `确定要删除《${doc.title}》吗？`,
-                                      `Delete "${doc.title}"?`
-                                    );
-                              if (window.confirm(confirmMsg)) {
-                                deleteDocument(doc.id);
-                              }
-                            }}
+                            onClick={() => setConfirmDeleteDoc(doc)}
                             title={t('删除简报', 'Delete')}
                             className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded transition-colors"
                           >
@@ -652,6 +757,88 @@ export const HomeDashboard: React.FC = () => {
           </section>
         )}
       </div>
+
+      {/* CONFIRM DELETE ALL MODAL */}
+      {confirmDeleteAllOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <h3 className="text-base font-bold text-white">
+                {t('确认彻底清空全部简报？', 'Delete All Bulletins?')}
+              </h3>
+            </div>
+            <p className="text-sm text-zinc-300 leading-relaxed">
+              {t(
+                `您即将彻底清空作品库中的全部 ${documents.length} 份简报。清空后作品库将进入空白状态，此操作无法撤销！`,
+                `You are about to permanently delete all ${documents.length} bulletins in your workspace. This cannot be undone!`
+              )}
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteAllOpen(false)}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+              >
+                {t('取消', 'Cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteAllDocuments();
+                  setConfirmDeleteAllOpen(false);
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-sm"
+              >
+                {t(`确认清空全部 (${documents.length})`, `Delete All (${documents.length})`)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE SINGLE DOC MODAL */}
+      {confirmDeleteDoc && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
+                <Trash2 size={20} />
+              </div>
+              <h3 className="text-base font-bold text-white truncate">
+                {t('确认删除此简报？', 'Delete Bulletin?')}
+              </h3>
+            </div>
+            <p className="text-sm text-zinc-300 leading-relaxed">
+              {t(
+                `确定要删除简报《${confirmDeleteDoc.title}》吗？此操作无法撤销。`,
+                `Are you sure you want to delete "${confirmDeleteDoc.title}"? This cannot be undone.`
+              )}
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteDoc(null)}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+              >
+                {t('取消', 'Cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteDocument(confirmDeleteDoc.id);
+                  setConfirmDeleteDoc(null);
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-sm"
+              >
+                {t('确认删除', 'Delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

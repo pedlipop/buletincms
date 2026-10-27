@@ -313,6 +313,7 @@ interface BulletinState {
   importDocumentJson: (doc: BulletinDocument) => void;
   switchDocument: (docId: string) => void;
   deleteDocument: (docId: string) => void;
+  deleteAllDocuments: () => void;
   syncRemoteDatabase: () => Promise<void>;
 }
 
@@ -479,17 +480,20 @@ const loadInitialState = () => {
             }
           });
         });
-        // Auto-clean placeholder/empty initial files if the user has only an empty doc (0 containers)
+        // Keep existing documents, or empty list if user deliberately deleted all
         let cleanDocs = docs.filter((d) => d && Array.isArray(d.rootBlocks));
-        if (cleanDocs.length === 1 && cleanDocs[0].rootBlocks.length === 0) {
-          cleanDocs = [createDefaultGreyBulletin()];
-        } else if (cleanDocs.length === 0) {
-          cleanDocs = [createDefaultGreyBulletin()];
+        const hadExplicitEmptyDocs = Array.isArray(parsed.documents) && parsed.documents.length === 0;
+        if (!hadExplicitEmptyDocs) {
+          if (cleanDocs.length === 1 && cleanDocs[0].rootBlocks.length === 0) {
+            cleanDocs = [createDefaultGreyBulletin()];
+          } else if (cleanDocs.length === 0) {
+            cleanDocs = [createDefaultGreyBulletin()];
+          }
         }
 
         return {
           documents: cleanDocs,
-          activeDocId: cleanDocs.some((d) => d.id === parsed.activeDocId) ? parsed.activeDocId : cleanDocs[0].id,
+          activeDocId: cleanDocs.some((d) => d.id === parsed.activeDocId) ? parsed.activeDocId : (cleanDocs[0]?.id || ''),
           savedTemplates: (parsed.savedTemplates || []) as SavedTemplate[],
           customAssets: loadCustomAssets(cleanDocs),
         };
@@ -526,17 +530,33 @@ const persistState = (
   }
 };
 
+const FALLBACK_BLANK_DOC: BulletinDocument = {
+  id: 'blank-fallback-doc',
+  title: '未命名自由排版简报',
+  issueNumber: new Date().toISOString().slice(0, 7),
+  status: 'draft',
+  canvasWidth: 480,
+  wireframeMode: false,
+  showGridGuides: false,
+  updatedAt: new Date().toISOString(),
+  rootBlocks: [],
+};
+
 const initial = loadInitialState();
 
 export const useBulletinStore = create<BulletinState>((set, get) => {
   const commitDocUpdate = (nextDoc: BulletinDocument) => {
     const state = get();
     const currentDoc = state.getActiveDoc();
-    const nextDocs = state.documents.map((d) => (d.id === nextDoc.id ? nextDoc : d));
+    const docExists = state.documents.some((d) => d.id === nextDoc.id);
+    const nextDocs = docExists
+      ? state.documents.map((d) => (d.id === nextDoc.id ? nextDoc : d))
+      : [nextDoc, ...state.documents];
     const nextPast = [...state.past.slice(-29), currentDoc];
-    persistState(nextDocs, state.activeDocId, state.savedTemplates);
+    persistState(nextDocs, nextDoc.id, state.savedTemplates);
     set({
       documents: nextDocs,
+      activeDocId: nextDoc.id,
       past: nextPast,
       future: [],
     });
@@ -651,7 +671,9 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
     getActiveDoc: () => {
       const state = get();
       return (
-        state.documents.find((d) => d.id === state.activeDocId) || state.documents[0]
+        state.documents.find((d) => d.id === state.activeDocId) ||
+        state.documents[0] ||
+        FALLBACK_BLANK_DOC
       );
     },
 
@@ -1703,12 +1725,14 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
 
     deleteDocument: (docId) => {
       const state = get();
-      let nextDocs = state.documents.filter((d) => d.id !== docId);
-      if (nextDocs.length === 0) {
-        nextDocs = [createDefaultGreyBulletin()];
-      }
+      const nextDocs = state.documents.filter((d) => d.id !== docId);
       const nextActiveId =
-        state.activeDocId === docId ? nextDocs[0].id : (nextDocs.find((d) => d.id === state.activeDocId)?.id || nextDocs[0].id);
+        nextDocs.length > 0
+          ? state.activeDocId === docId
+            ? nextDocs[0].id
+            : nextDocs.find((d) => d.id === state.activeDocId)?.id || nextDocs[0].id
+          : '';
+
       persistState(nextDocs, nextActiveId, state.savedTemplates);
       if (typeof window !== 'undefined') {
         fetch(`/api/bulletins/${docId}`, { method: 'DELETE' }).catch(() => {});
@@ -1718,6 +1742,26 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
         activeDocId: nextActiveId,
         past: [],
         future: [],
+        selectedRootBlockId: nextDocs[0]?.rootBlocks[0]?.id || null,
+        selectedChildBlockId: null,
+        selectedImageSlotId: null,
+      });
+    },
+
+    deleteAllDocuments: () => {
+      const state = get();
+      persistState([], '', state.savedTemplates);
+      if (typeof window !== 'undefined') {
+        fetch('/api/bulletins', { method: 'DELETE' }).catch(() => {});
+      }
+      set({
+        documents: [],
+        activeDocId: '',
+        past: [],
+        future: [],
+        selectedRootBlockId: null,
+        selectedChildBlockId: null,
+        selectedImageSlotId: null,
       });
     },
 
@@ -1744,10 +1788,12 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
         if (!res.ok) return;
         const remoteList: Array<{ id: string; title: string; updatedAt: string }> = await res.json();
         if (!Array.isArray(remoteList) || remoteList.length === 0) {
-          // If remote database is empty, push the local active document
-          const localActive = get().getActiveDoc();
-          if (localActive) {
-            syncDocToBackend(localActive);
+          // If remote database is empty and local has documents, push local active document
+          if (get().documents.length > 0) {
+            const localActive = get().getActiveDoc();
+            if (localActive) {
+              syncDocToBackend(localActive);
+            }
           }
           return;
         }
