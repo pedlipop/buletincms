@@ -748,10 +748,10 @@ export const RightInspector: React.FC = () => {
                                 showImages: true,
                               } as DatedEventBlock));
                             }}
-                            className={`p-1.5 rounded-md border text-left flex flex-col justify-between transition-all ${
+                            className={`p-1.5 rounded-md border text-left flex flex-col justify-between transition-all duration-150 active:scale-95 hover:scale-[1.02] ${
                               isCur
-                                ? 'bg-blue-950/70 border-blue-500 shadow-sm ring-1 ring-blue-500/40 text-white'
-                                : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
+                                ? 'bg-blue-950/70 border-blue-500 shadow-md ring-1 ring-blue-500/50 text-white'
+                                : 'bg-zinc-900 border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800/80 text-zinc-300'
                             }`}
                           >
                             <div className="flex items-center justify-between w-full mb-1">

@@ -802,7 +802,7 @@ export const App: React.FC = () => {
               }
               className={`fixed ${
                 zoomBarPos ? '' : 'bottom-5 right-4 md:right-[340px]'
-              } z-30 flex items-center gap-0.5 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-lg p-1 shadow-2xl text-xs select-none`}
+              } z-30 flex items-center gap-0.5 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-lg p-1 shadow-2xl text-xs select-none animate-spring-in`}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Drag Handle */}

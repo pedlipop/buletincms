@@ -305,9 +305,9 @@ export const HomeDashboard: React.FC = () => {
             <button
               type="button"
               onClick={() => createNewDocument('blank', true)}
-              className="group bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-blue-500/60 rounded-xl p-4 text-left transition-all flex items-start gap-4 shadow-sm"
+              className="group bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-blue-500/60 rounded-xl p-4 text-left transition-all flex items-start gap-4 shadow-sm card-lift btn-press"
             >
-              <div className="w-11 h-11 rounded-lg bg-blue-950/60 group-hover:bg-blue-900/60 border border-blue-700/50 flex items-center justify-center shrink-0 text-blue-300">
+              <div className="w-11 h-11 rounded-lg bg-blue-950/60 group-hover:bg-blue-900/60 border border-blue-700/50 flex items-center justify-center shrink-0 text-blue-300 group-hover:scale-110 transition-transform">
                 <Plus size={20} />
               </div>
               <div className="min-w-0 flex-1">
@@ -327,9 +327,9 @@ export const HomeDashboard: React.FC = () => {
             <button
               type="button"
               onClick={() => createNewDocument('clone_current', true)}
-              className="group bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-zinc-500 rounded-xl p-4 text-left transition-all flex items-start gap-4 shadow-sm"
+              className="group bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-zinc-500 rounded-xl p-4 text-left transition-all flex items-start gap-4 shadow-sm card-lift btn-press"
             >
-              <div className="w-11 h-11 rounded-lg bg-zinc-800 group-hover:bg-zinc-700 border border-zinc-700 flex items-center justify-center shrink-0 text-zinc-100">
+              <div className="w-11 h-11 rounded-lg bg-zinc-800 group-hover:bg-zinc-700 border border-zinc-700 flex items-center justify-center shrink-0 text-zinc-100 group-hover:scale-110 transition-transform">
                 <FilePlus2 size={20} />
               </div>
               <div className="min-w-0 flex-1">
@@ -415,7 +415,7 @@ export const HomeDashboard: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredDocs.map((doc) => {
+              {filteredDocs.map((doc, index) => {
                 const isCurrentActive = doc.id === activeDocId;
                 const isPublished = doc.status === 'published';
                 const sectionCount = doc.rootBlocks.filter(
@@ -431,7 +431,8 @@ export const HomeDashboard: React.FC = () => {
                   <div
                     key={doc.id}
                     onClick={() => openDocumentInEditor(doc.id)}
-                    className={`group bg-zinc-900 hover:bg-zinc-900/90 border rounded-xl overflow-hidden flex flex-col cursor-pointer transition-all shadow-lg ${
+                    style={{ animationDelay: `${index * 50}ms` }}
+                    className={`group bg-zinc-900 hover:bg-zinc-900/90 border rounded-xl overflow-hidden flex flex-col cursor-pointer transition-all card-lift animate-spring-in shadow-lg ${
                       isCurrentActive
                         ? 'border-blue-500/70 ring-1 ring-blue-500/30'
                         : 'border-zinc-800 hover:border-zinc-600'
@@ -439,7 +440,9 @@ export const HomeDashboard: React.FC = () => {
                   >
                     {/* Top Visual Thumbnail Preview Area */}
                     <div className="h-48 bg-zinc-950/90 border-b border-zinc-800/80 pt-4 px-4 flex justify-center overflow-hidden relative">
-                      {renderMiniBulletinThumbnail(doc)}
+                      <div className="transform group-hover:scale-[1.04] transition-transform duration-300 ease-out origin-top">
+                        {renderMiniBulletinThumbnail(doc)}
+                      </div>
 
                       {/* Status Badge (Top Left) */}
                       <button

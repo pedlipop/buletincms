@@ -165,10 +165,11 @@ const FloatingBlockBar: React.FC<FloatingToolbarProps> = ({
         color: '#ffffff',
         padding: '2px 6px',
         borderRadius: '4px',
-        boxShadow: '0 4px 10px rgba(0,0,0,0.25)',
+        boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
         fontSize: '10px',
         fontWeight: 600,
       }}
+      className="animate-pop-in select-none"
     >
       <div
         draggable
@@ -180,7 +181,7 @@ const FloatingBlockBar: React.FC<FloatingToolbarProps> = ({
         }}
         onDragEnd={() => setActiveDrag(null)}
         title="按住拖拽此模块到任意容器或位置 (Drag to any container)"
-        className="flex items-center gap-1 cursor-grab active:cursor-grabbing pr-1.5 mr-1 border-r border-white/20 hover:text-amber-300"
+        className="flex items-center gap-1 cursor-grab active:cursor-grabbing pr-1.5 mr-1 border-r border-white/20 hover:text-amber-300 transition-colors"
       >
         <GripVertical size={12} />
         <span>拖拽 · {label}</span>
@@ -189,7 +190,7 @@ const FloatingBlockBar: React.FC<FloatingToolbarProps> = ({
         type="button"
         onClick={onMoveUp}
         title="上移 (Move Up)"
-        className="p-1 hover:bg-white/20 rounded"
+        className="p-1 hover:bg-white/20 active:scale-90 transition-transform rounded"
       >
         <ArrowUp size={11} />
       </button>
@@ -197,7 +198,7 @@ const FloatingBlockBar: React.FC<FloatingToolbarProps> = ({
         type="button"
         onClick={onMoveDown}
         title="下移 (Move Down)"
-        className="p-1 hover:bg-white/20 rounded"
+        className="p-1 hover:bg-white/20 active:scale-90 transition-transform rounded"
       >
         <ArrowDown size={11} />
       </button>
@@ -205,7 +206,7 @@ const FloatingBlockBar: React.FC<FloatingToolbarProps> = ({
         type="button"
         onClick={onDuplicate}
         title="复制 (Duplicate)"
-        className="p-1 hover:bg-white/20 rounded"
+        className="p-1 hover:bg-white/20 active:scale-90 transition-transform rounded"
       >
         <Copy size={11} />
       </button>
@@ -214,7 +215,7 @@ const FloatingBlockBar: React.FC<FloatingToolbarProps> = ({
           type="button"
           onClick={onSaveTemplate}
           title="保存到我的模板 (Save to My Templates)"
-          className="p-1 hover:bg-white/20 rounded"
+          className="p-1 hover:bg-white/20 active:scale-90 transition-transform rounded"
         >
           <BookmarkPlus size={11} />
         </button>
@@ -223,7 +224,7 @@ const FloatingBlockBar: React.FC<FloatingToolbarProps> = ({
         type="button"
         onClick={onDelete}
         title="删除模块 (Delete)"
-        className="p-1 hover:bg-red-500/80 rounded"
+        className="p-1 hover:bg-red-500/80 active:scale-90 transition-transform rounded"
       >
         <Trash2 size={11} />
       </button>

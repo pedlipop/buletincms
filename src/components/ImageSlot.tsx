@@ -413,7 +413,10 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
           : isDraggingOver
           ? '2px dashed #2563eb'
           : customBorderCss || (!showActualImage ? '1px solid #a1a1aa' : 'none'),
-        boxShadow: boxShadowCss,
+        boxShadow: isSelected
+          ? '0 0 0 1px #2563eb, 0 0 14px rgba(37, 99, 235, 0.45)'
+          : boxShadowCss,
+        transition: 'border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease',
         position: 'relative',
         width: frameWidthStyle,
         maxWidth: '100%',
@@ -733,6 +736,7 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
                 borderRadius: '9999px',
                 boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
               }}
+              className="animate-pop-in select-none"
             >
               {showActualImage && (
                 <>
