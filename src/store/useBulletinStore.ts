@@ -424,55 +424,75 @@ const syncDocToBackend = (doc: BulletinDocument) => {
   }, 1000);
 };
 
+export const sanitizeDocForProduction = (doc: BulletinDocument): BulletinDocument => {
+  if (!doc || !Array.isArray(doc.rootBlocks)) return doc;
+  doc.rootBlocks.forEach((rb) => {
+    if (rb.type === 'masthead') {
+      if (rb.heroImage?.url?.startsWith('/demo/')) {
+        rb.heroImage.url = null;
+      }
+      if (rb.orgNameLeft) {
+        rb.orgNameLeft = rb.orgNameLeft.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
+      }
+      if (rb.issueMetaRight) {
+        rb.issueMetaRight = rb.issueMetaRight.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
+      }
+      if (rb.subBannerLeft) {
+        rb.subBannerLeft = rb.subBannerLeft.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
+      }
+      if (rb.subBannerRight) {
+        rb.subBannerRight = rb.subBannerRight.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
+      }
+    }
+    if (rb.type === 'section_container') {
+      // Clear container background setting so no container is filled with images
+      if (rb.bgImage) {
+        rb.bgImage.url = null;
+      }
+      rb.children?.forEach((cb) => {
+        if (cb.type === 'split_media_text') {
+          cb.images?.forEach((img) => {
+            if (img.url?.startsWith('/demo/')) img.url = null;
+          });
+        }
+        if (cb.type === 'dated_event_block') {
+          cb.images?.forEach((img) => {
+            if (img.url?.startsWith('/demo/')) img.url = null;
+          });
+        }
+        if (cb.type === 'freeform_asset_block') {
+          if (cb.image?.url?.startsWith('/demo/')) cb.image.url = null;
+        }
+        if (cb.type === 'custom_columns_block') {
+          cb.items?.forEach((col) => {
+            if (col.image?.url?.startsWith('/demo/')) col.image.url = null;
+          });
+        }
+        if (cb.type === 'two_column_cards') {
+          if (cb.leftCard?.image?.url?.startsWith('/demo/')) cb.leftCard.image.url = null;
+          if (cb.rightCard?.image?.url?.startsWith('/demo/')) cb.rightCard.image.url = null;
+        }
+      });
+    }
+    if (rb.type === 'highlights_bar') {
+      rb.items?.forEach((item) => {
+        if (item.image?.url?.startsWith('/demo/')) item.image.url = null;
+      });
+    }
+    if (rb.type === 'footer_banner' && rb.bannerImage?.url?.startsWith('/demo/')) {
+      rb.bannerImage.url = null;
+    }
+  });
+  return doc;
+};
+
 const loadInitialState = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.documents) && parsed.documents.length > 0) {
-        const docs = parsed.documents as BulletinDocument[];
-        // Production clean: strip any legacy demo/placeholder image URLs
-        docs.forEach((doc) => {
-          doc.rootBlocks.forEach((rb) => {
-            if (rb.type === 'masthead') {
-              if (rb.heroImage?.url?.startsWith('/demo/')) {
-                rb.heroImage.url = null;
-              }
-              if (rb.orgNameLeft) {
-                rb.orgNameLeft = rb.orgNameLeft.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
-              }
-              if (rb.issueMetaRight) {
-                rb.issueMetaRight = rb.issueMetaRight.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
-              }
-              if (rb.subBannerLeft) {
-                rb.subBannerLeft = rb.subBannerLeft.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
-              }
-              if (rb.subBannerRight) {
-                rb.subBannerRight = rb.subBannerRight.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
-              }
-            }
-            if (rb.type === 'section_container') {
-              if (rb.bgImage?.url?.startsWith('/demo/')) {
-                rb.bgImage.url = null;
-              }
-              rb.children.forEach((cb) => {
-                if (cb.type === 'split_media_text') {
-                  cb.images.forEach((img) => {
-                    if (img.url?.startsWith('/demo/')) img.url = null;
-                  });
-                }
-                if (cb.type === 'dated_event_block') {
-                  cb.images.forEach((img) => {
-                    if (img.url?.startsWith('/demo/')) img.url = null;
-                  });
-                }
-              });
-            }
-            if (rb.type === 'footer_banner' && rb.bannerImage?.url?.startsWith('/demo/')) {
-              rb.bannerImage.url = null;
-            }
-          });
-        });
+        const docs = (parsed.documents as BulletinDocument[]).map(sanitizeDocForProduction);
         // Keep existing documents, or empty list if user deliberately deleted all
         let cleanDocs = docs.filter((d) => d && Array.isArray(d.rootBlocks));
         const hadExplicitEmptyDocs = Array.isArray(parsed.documents) && parsed.documents.length === 0;
@@ -1799,7 +1819,7 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
             if (docRes.ok) {
               const fullDoc = await docRes.json();
               if (fullDoc && fullDoc.id && Array.isArray(fullDoc.rootBlocks)) {
-                remoteDocs.push(fullDoc);
+                remoteDocs.push(sanitizeDocForProduction(fullDoc));
               }
             }
           } catch {

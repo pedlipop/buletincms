@@ -14,19 +14,9 @@ import {
 export const uid = (prefix = 'id') =>
   `${prefix}_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36).slice(-4)}`;
 
-export const DEMO_PHOTOS = [
-  '/demo/hero_industrial_park.jpg',
-  '/demo/csr_community_event.jpg',
-  '/demo/csr_community_support.jpg',
-  '/demo/employee_team_sports.jpg',
-];
+export const DEMO_PHOTOS: string[] = [];
 
-let photoCycle = 0;
-export const getNextDemoPhoto = () => {
-  const p = DEMO_PHOTOS[photoCycle % DEMO_PHOTOS.length];
-  photoCycle++;
-  return p;
-};
+export const getNextDemoPhoto = () => null;
 
 export const createImageSlot = (
   aspectRatio: AspectRatioType = '4:3',
@@ -34,7 +24,7 @@ export const createImageSlot = (
   url: string | null = null
 ): ImageSlotData => ({
   id: uid('img'),
-  url: url || getNextDemoPhoto(),
+  url: url ?? null,
   label,
   aspectRatio,
   zoom: 1,
@@ -428,7 +418,7 @@ export const createSectionContainer = (
   padding: options?.padding ?? 'md',
   borderRadius: options?.borderRadius ?? 10,
   bordered: true,
-  bgImage: createImageSlot('free', 'CONTAINER BG ASSET (可选背景图)'),
+  bgImage: undefined,
   children:
     children.length > 0 ? children : [createContentBlock('simple_text_block')],
 });
@@ -447,7 +437,7 @@ export const createBlankContainer = (
   padding: 'sm',
   borderRadius: 8,
   bordered: true,
-  bgImage: createImageSlot('free', 'CONTAINER BG ASSET'),
+  bgImage: undefined,
   children: [createContentBlock(initialChildType, variantHint)],
 });
 
@@ -514,7 +504,7 @@ export const createFooterBannerBlock = (): FooterBannerBlock => ({
   brandLabel: 'CNGR 中伟股份',
   sloganMain: '矢志成为全球领先的新能源材料科学公司',
   sloganSub: '团结 · 务实 · 敬业 · 奋进',
-  bannerImage: createImageSlot('16:9', '产业基地全景', '/demo/hero_industrial_park.jpg'),
+  bannerImage: createImageSlot('16:9', '产业基地全景', null),
 });
 
 export const createDefaultGreyBulletin = (): BulletinDocument => ({
