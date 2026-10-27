@@ -2033,16 +2033,21 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
                   style={{
                     backgroundColor: barColor,
                     color: '#ffffff',
-                    padding: '6px 14px',
+                    padding: '8px 14px',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    fontSize: '10.5px',
+                    minHeight: '28px',
+                    fontSize: '11px',
                     fontWeight: 600,
+                    lineHeight: '1.4',
+                    gap: '12px',
+                    overflow: 'visible',
                   }}
                 >
                   <EditableText
                     value={b.orgNameLeft}
+                    style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4' }}
                     onChange={(orgNameLeft) =>
                       updateRootBlock(b.id, (prev) => ({
                         ...prev,
@@ -2052,6 +2057,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
                   />
                   <EditableText
                     value={b.issueMetaRight}
+                    style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4' }}
                     onChange={(issueMetaRight) =>
                       updateRootBlock(b.id, (prev) => ({
                         ...prev,
@@ -2151,10 +2157,14 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
                       alignItems: 'center',
                       fontSize: '12px',
                       fontWeight: 800,
+                      gap: '10px',
+                      minHeight: '26px',
+                      lineHeight: '1.4',
                     }}
                   >
                     <EditableText
                       value={b.subBannerLeft}
+                      style={{ whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4' }}
                       onChange={(subBannerLeft) =>
                         updateRootBlock(b.id, (prev) => ({
                           ...prev,
@@ -2170,7 +2180,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
                           subBannerRight,
                         } as MastheadBlock))
                       }
-                      style={{ fontSize: '11px', fontWeight: 600, opacity: 0.92 }}
+                      style={{ fontSize: '11px', fontWeight: 600, opacity: 0.92, whiteSpace: 'nowrap', flexShrink: 0, lineHeight: '1.4' }}
                     />
                   </div>
                   {b.showSubBannerDesc !== false && (

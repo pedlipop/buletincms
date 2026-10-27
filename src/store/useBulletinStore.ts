@@ -115,6 +115,60 @@ export function findImageSlotInDocument(
   return found;
 }
 
+export interface ImageSlotContext {
+  slot: ImageSlotData | null;
+  rootBlock: RootBlock | null;
+  childBlock: ContentBlock | null;
+}
+
+export function findImageSlotContext(
+  doc: BulletinDocument,
+  slotId: string | null
+): ImageSlotContext {
+  if (!slotId) return { slot: null, rootBlock: null, childBlock: null };
+  for (const rb of doc.rootBlocks) {
+    if (rb.type === 'masthead') {
+      if (rb.heroImage?.id === slotId) return { slot: rb.heroImage, rootBlock: rb, childBlock: null };
+    }
+    if (rb.type === 'highlights_bar') {
+      for (const it of rb.items) {
+        if (it.image?.id === slotId) return { slot: it.image, rootBlock: rb, childBlock: null };
+      }
+    }
+    if (rb.type === 'footer_banner') {
+      if (rb.bannerImage?.id === slotId) return { slot: rb.bannerImage, rootBlock: rb, childBlock: null };
+    }
+    if (rb.type === 'section_container') {
+      if (rb.bgImage?.id === slotId) return { slot: rb.bgImage, rootBlock: rb, childBlock: null };
+      for (const cb of rb.children) {
+        if (cb.type === 'freeform_asset_block' && cb.image?.id === slotId) {
+          return { slot: cb.image, rootBlock: rb, childBlock: cb };
+        }
+        if (cb.type === 'split_media_text') {
+          for (const img of cb.images) {
+            if (img.id === slotId) return { slot: img, rootBlock: rb, childBlock: cb };
+          }
+        }
+        if (cb.type === 'dated_event_block') {
+          for (const img of cb.images) {
+            if (img.id === slotId) return { slot: img, rootBlock: rb, childBlock: cb };
+          }
+        }
+        if (cb.type === 'two_column_cards') {
+          if (cb.leftCard?.image?.id === slotId) return { slot: cb.leftCard.image, rootBlock: rb, childBlock: cb };
+          if (cb.rightCard?.image?.id === slotId) return { slot: cb.rightCard.image, rootBlock: rb, childBlock: cb };
+        }
+        if (cb.type === 'custom_columns_block') {
+          for (const it of cb.items) {
+            if (it.image?.id === slotId) return { slot: it.image, rootBlock: rb, childBlock: cb };
+          }
+        }
+      }
+    }
+  }
+  return { slot: null, rootBlock: null, childBlock: null };
+}
+
 // Drag-and-drop payload transferred via HTML5 DataTransfer or store state
 export type DragPayload =
   | {
@@ -238,6 +292,13 @@ interface BulletinState {
     url: string
   ) => CustomAssetItem;
   deleteCustomAsset: (id: string) => void;
+
+  applyFrameSettingsToGroup: (
+    slotId: string,
+    scope: 'block' | 'container' | 'doc',
+    patch: Partial<ImageSlotData>
+  ) => void;
+  resetToDemoBulletin: () => void;
 
   createNewDocument: (mode: 'grey_template' | 'blank' | 'clone_current', openImmediately?: boolean) => void;
   duplicateDocumentById: (docId: string) => void;
@@ -398,11 +459,19 @@ const loadInitialState = () => {
             }
           });
         });
+        // Auto-clean placeholder/empty initial files if the user has only an empty doc (0 containers)
+        let cleanDocs = docs.filter((d) => d && Array.isArray(d.rootBlocks));
+        if (cleanDocs.length === 1 && cleanDocs[0].rootBlocks.length === 0) {
+          cleanDocs = [createDefaultGreyBulletin()];
+        } else if (cleanDocs.length === 0) {
+          cleanDocs = [createDefaultGreyBulletin()];
+        }
+
         return {
-          documents: docs,
-          activeDocId: parsed.activeDocId || docs[0].id,
+          documents: cleanDocs,
+          activeDocId: cleanDocs.some((d) => d.id === parsed.activeDocId) ? parsed.activeDocId : cleanDocs[0].id,
           savedTemplates: (parsed.savedTemplates || []) as SavedTemplate[],
-          customAssets: loadCustomAssets(docs),
+          customAssets: loadCustomAssets(cleanDocs),
         };
       }
     }
@@ -1227,6 +1296,101 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
       }
     },
 
+    applyFrameSettingsToGroup: (slotId, scope, patch) => {
+      const doc = get().getActiveDoc();
+      const ctx = findImageSlotContext(doc, slotId);
+      if (!ctx.slot) return;
+
+      const framePatch: Partial<ImageSlotData> = {};
+      const allowedKeys: (keyof ImageSlotData)[] = [
+        'aspectRatio',
+        'frameRadius',
+        'frameBorderWidth',
+        'frameBorderColor',
+        'frameBorderStyle',
+        'frameMatPadding',
+        'frameMatColor',
+        'frameShadow',
+        'frameOverlayUrl',
+        'frameAssetLayer',
+        'frameAssetScale',
+        'frameAssetX',
+        'frameAssetY',
+        'frameWidthMode',
+        'frameCustomWidthPct',
+        'frameCustomWidthPx',
+        'frameHeightMode',
+        'frameCustomHeightPx',
+        'frameAlign',
+      ];
+      for (const k of allowedKeys) {
+        if (k in patch && patch[k] !== undefined) {
+          (framePatch as any)[k] = patch[k];
+        }
+      }
+
+      const nextDoc: BulletinDocument = JSON.parse(JSON.stringify(doc));
+
+      const applyToSlot = (slot: any) => {
+        if (!slot || typeof slot !== 'object') return;
+        Object.assign(slot, framePatch);
+      };
+
+      if (scope === 'block' && ctx.childBlock && ctx.rootBlock) {
+        const root = nextDoc.rootBlocks.find((r) => r.id === ctx.rootBlock?.id);
+        if (root && root.type === 'section_container') {
+          const child = root.children.find((c) => c.id === ctx.childBlock?.id);
+          if (child) {
+            if ('images' in child && Array.isArray((child as any).images)) {
+              (child as any).images.forEach(applyToSlot);
+            }
+            if (framePatch.aspectRatio && 'imageAspectRatio' in child) {
+              (child as any).imageAspectRatio = framePatch.aspectRatio;
+            }
+          }
+        }
+      } else if (scope === 'container' && ctx.rootBlock) {
+        const root = nextDoc.rootBlocks.find((r) => r.id === ctx.rootBlock?.id);
+        if (root) {
+          const walkContainer = (node: any) => {
+            if (!node || typeof node !== 'object') return;
+            if ('aspectRatio' in node && 'focalPoint' in node) {
+              applyToSlot(node);
+              return;
+            }
+            if (framePatch.aspectRatio && 'imageAspectRatio' in node) {
+              node.imageAspectRatio = framePatch.aspectRatio;
+            }
+            for (const k of Object.keys(node)) {
+              if (Array.isArray(node[k])) node[k].forEach(walkContainer);
+              else if (typeof node[k] === 'object') walkContainer(node[k]);
+            }
+          };
+          walkContainer(root);
+        }
+      } else {
+        // scope === 'doc'
+        const walkAll = (node: any) => {
+          if (!node || typeof node !== 'object') return;
+          if ('aspectRatio' in node && 'focalPoint' in node) {
+            applyToSlot(node);
+            return;
+          }
+          if (framePatch.aspectRatio && 'imageAspectRatio' in node) {
+            node.imageAspectRatio = framePatch.aspectRatio;
+          }
+          for (const k of Object.keys(node)) {
+            if (Array.isArray(node[k])) node[k].forEach(walkAll);
+            else if (typeof node[k] === 'object') walkAll(node[k]);
+          }
+        };
+        walkAll(nextDoc.rootBlocks);
+      }
+
+      nextDoc.updatedAt = new Date().toISOString();
+      commitDocUpdate(nextDoc);
+    },
+
     reorderBlockImages: (sourceSlotId, targetSlotId) => {
       if (sourceSlotId === targetSlotId) return;
       const doc = get().getActiveDoc();
@@ -1514,10 +1678,12 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
 
     deleteDocument: (docId) => {
       const state = get();
-      if (state.documents.length <= 1) return;
-      const nextDocs = state.documents.filter((d) => d.id !== docId);
+      let nextDocs = state.documents.filter((d) => d.id !== docId);
+      if (nextDocs.length === 0) {
+        nextDocs = [createDefaultGreyBulletin()];
+      }
       const nextActiveId =
-        state.activeDocId === docId ? nextDocs[0].id : state.activeDocId;
+        state.activeDocId === docId ? nextDocs[0].id : (nextDocs.find((d) => d.id === state.activeDocId)?.id || nextDocs[0].id);
       persistState(nextDocs, nextActiveId, state.savedTemplates);
       if (typeof window !== 'undefined') {
         fetch(`/api/bulletins/${docId}`, { method: 'DELETE' }).catch(() => {});
@@ -1527,6 +1693,22 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
         activeDocId: nextActiveId,
         past: [],
         future: [],
+      });
+    },
+
+    resetToDemoBulletin: () => {
+      const freshDoc = createDefaultGreyBulletin();
+      const nextDocs = [freshDoc];
+      persistState(nextDocs, freshDoc.id, []);
+      set({
+        documents: nextDocs,
+        activeDocId: freshDoc.id,
+        currentView: 'editor',
+        past: [],
+        future: [],
+        selectedRootBlockId: freshDoc.rootBlocks[0]?.id || null,
+        selectedChildBlockId: null,
+        selectedImageSlotId: null,
       });
     },
 

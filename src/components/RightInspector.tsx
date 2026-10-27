@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   Italic,
   Layers,
+  LayoutGrid,
   Palette,
   Plus,
   RotateCcw,
@@ -39,6 +40,7 @@ import {
   FooterBannerBlock,
   FreeformAssetBlock,
   HighlightsBarBlock,
+  ImageSlotData,
   IntroQuoteBoxBlock,
   KpiBannerCardBlock,
   KpiStatRowBlock,
@@ -57,6 +59,7 @@ import {
 } from '../data/presets';
 import {
   findImageSlotInDocument,
+  findImageSlotContext,
   useBulletinStore,
 } from '../store/useBulletinStore';
 import { compressImageFile } from './ImageSlot';
@@ -200,6 +203,11 @@ export const RightInspector: React.FC = () => {
   const applySampleColorPalettes = useBulletinStore(
     (s) => s.applySampleColorPalettes
   );
+  const applyFrameSettingsToGroup = useBulletinStore(
+    (s) => s.applyFrameSettingsToGroup
+  );
+
+  const [syncAllFramesInBlock, setSyncAllFramesInBlock] = useState(true);
 
   const selectedRoot =
     doc.rootBlocks.find((b) => b.id === selectedRootBlockId) || null;
@@ -212,6 +220,17 @@ export const RightInspector: React.FC = () => {
       : null;
 
   const selectedImageSlot = findImageSlotInDocument(doc, selectedImageSlotId);
+  const slotContext = findImageSlotContext(doc, selectedImageSlotId);
+  const effectiveParentBlock = selectedChild || slotContext.childBlock;
+  const effectiveRootBlock = selectedRoot || slotContext.rootBlock;
+
+  const updateSelectedSlotWithSync = (patch: Partial<ImageSlotData>) => {
+    if (!selectedImageSlot) return;
+    updateImageSlotById(selectedImageSlot.id, patch);
+    if (syncAllFramesInBlock) {
+      applyFrameSettingsToGroup(selectedImageSlot.id, 'block', patch);
+    }
+  };
 
   const cleanFileName = (file: File, fallback: string) =>
     file.name.replace(/\.[^/.]+$/, '').slice(0, 24) || fallback;
@@ -626,6 +645,191 @@ export const RightInspector: React.FC = () => {
               </span>
             </div>
 
+            {/* Photo Layout Presets & Add Photo (Displayed when clicking the photo!) */}
+            {effectiveParentBlock && effectiveParentBlock.type === 'dated_event_block' && (() => {
+              const b = effectiveParentBlock as DatedEventBlock;
+              const photoCount = b.images.length;
+              const availablePresets = getPresetsForCount(photoCount);
+              let effectivePreset: PhotoLayoutPreset = b.layoutPreset || 'auto';
+              if (effectivePreset === 'auto') {
+                if (photoCount === 6) {
+                  effectivePreset = b.gridColumns === 4 ? '4_plus_2' : b.gridColumns === 2 ? '2x3' : '3x2';
+                } else if (photoCount === 4) {
+                  effectivePreset = b.fitLastToMargin || b.gridColumns === 3 ? '3_plus_1' : b.gridColumns === 2 ? '2x2' : '3_plus_1';
+                } else if (photoCount === 3) {
+                  effectivePreset = b.fitLastToMargin || b.gridColumns === 2 ? '2_plus_1' : '3_cols';
+                } else if (photoCount === 5) {
+                  effectivePreset = '3_plus_2';
+                } else if (availablePresets[0]) {
+                  effectivePreset = availablePresets[0].id;
+                }
+              }
+
+              const demoUrls = [
+                '/demo/hero_industrial_park.jpg',
+                '/demo/csr_community_event.jpg',
+                '/demo/csr_community_support.jpg',
+                '/demo/employee_team_sports.jpg',
+              ];
+
+              const handleAddPhotoFromSlot = () => {
+                if (!effectiveRootBlock) return;
+                updateContentBlock(effectiveRootBlock.id, b.id, (prev) => {
+                  const cur = prev as DatedEventBlock;
+                  const nextUrl = demoUrls[cur.images.length % demoUrls.length];
+                  const nextImgs = [
+                    ...cur.images,
+                    createImageSlot(
+                      selectedImageSlot.aspectRatio || cur.imageAspectRatio || '4:3',
+                      `PHOTO ${cur.images.length + 1}`,
+                      nextUrl
+                    ),
+                  ];
+                  let nextPreset = cur.layoutPreset;
+                  if (nextImgs.length === 4 && (!nextPreset || nextPreset === 'auto')) {
+                    nextPreset = '2x2';
+                  } else if (nextImgs.length === 6 && (!nextPreset || nextPreset === 'auto')) {
+                    nextPreset = '3x2';
+                  }
+                  return {
+                    ...cur,
+                    images: nextImgs,
+                    showImages: true,
+                    layoutPreset: nextPreset,
+                    fitLastToMargin: true,
+                  };
+                });
+              };
+
+              return (
+                <div className="bg-zinc-950/80 p-2.5 rounded-lg border border-zinc-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                      <LayoutGrid size={13} className="text-blue-400" />
+                      <span>{t('配图排版方案预设', 'Photo Layout Presets')}</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 bg-zinc-800 text-zinc-300 rounded border border-zinc-700">
+                        {photoCount} {t('图', 'pics')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddPhotoFromSlot}
+                      className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] font-semibold transition"
+                    >
+                      <Plus size={11} />
+                      <span>{t('添加图片', 'Add Photo')}</span>
+                    </button>
+                  </div>
+
+                  {availablePresets.length > 0 && (
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {availablePresets.map((preset) => {
+                        const isCur = effectivePreset === preset.id;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => {
+                              if (!effectiveRootBlock) return;
+                              let targetCols: 1 | 2 | 3 | 4 = 3;
+                              let fitMargin = false;
+                              if (preset.id === '1_col') targetCols = 1;
+                              else if (preset.id === '2_cols' || preset.id === '2x2' || preset.id === '2x3' || preset.id === '2_plus_1' || preset.id === '2_plus_3') targetCols = 2;
+                              else if (preset.id === '3_cols' || preset.id === '3x2' || preset.id === '3_plus_1' || preset.id === '3_plus_2') targetCols = 3;
+                              else if (preset.id === '4_cols' || preset.id === '4_plus_2' || preset.id === '4_plus_1') targetCols = 4;
+                              if (preset.rows.length > 1 && preset.rows[preset.rows.length - 1] < preset.rows[0]) {
+                                fitMargin = true;
+                              }
+                              updateContentBlock(effectiveRootBlock.id, b.id, (prev) => ({
+                                ...prev,
+                                layoutPreset: preset.id,
+                                gridColumns: targetCols,
+                                fitLastToMargin: fitMargin,
+                                showImages: true,
+                              } as DatedEventBlock));
+                            }}
+                            className={`p-1.5 rounded-md border text-left flex flex-col justify-between transition-all ${
+                              isCur
+                                ? 'bg-blue-950/70 border-blue-500 shadow-sm ring-1 ring-blue-500/40 text-white'
+                                : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full mb-1">
+                              <span className="font-bold text-[10.5px] truncate">{t(preset.labelZh, preset.labelEn)}</span>
+                              {preset.isRecommended && (
+                                <span className="text-[8px] bg-blue-500/20 text-blue-300 px-1 py-0.2 rounded border border-blue-500/30">
+                                  {t('推荐', 'Fit')}
+                                </span>
+                              )}
+                            </div>
+                            <div className="w-full bg-zinc-950 p-1 rounded border border-zinc-800/80 space-y-0.5">
+                              {preset.rows.map((rowCols, rIdx) => (
+                                <div key={rIdx} className="flex gap-0.5 w-full">
+                                  {Array.from({ length: rowCols }).map((_, cIdx) => (
+                                    <div
+                                      key={cIdx}
+                                      className={`h-1.5 rounded-xs flex-1 ${isCur ? 'bg-blue-400' : 'bg-zinc-600'}`}
+                                    />
+                                  ))}
+                                </div>
+                              ))}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Batch Sync Toolbar (Applies frame settings to all frames) */}
+            <div className="bg-zinc-950/90 p-2 rounded-lg border border-zinc-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-zinc-200 select-none">
+                  <input
+                    type="checkbox"
+                    checked={syncAllFramesInBlock}
+                    onChange={(e) => setSyncAllFramesInBlock(e.target.checked)}
+                    className="rounded accent-blue-500"
+                  />
+                  <span>{t('同步修改本组所有画框', 'Sync style to all photos in block')}</span>
+                </label>
+              </div>
+              <div className="flex items-center gap-1 pt-1 border-t border-zinc-800/80 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyFrameSettingsToGroup(selectedImageSlot.id, 'block', selectedImageSlot);
+                  }}
+                  className="flex-1 py-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 text-blue-300 hover:text-blue-200 border border-zinc-700/80 rounded font-medium transition text-center"
+                  title={t('应用当前选中的画框风格与比例到本模块所有图片', 'Apply frame style to all images in block')}
+                >
+                  {t('应用到本模块所有画框', 'Apply to Block')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyFrameSettingsToGroup(selectedImageSlot.id, 'container', selectedImageSlot);
+                  }}
+                  className="flex-1 py-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700/80 rounded font-medium transition text-center"
+                  title={t('应用当前选中的画框风格与比例到本容器所有图片', 'Apply frame style to all images in container')}
+                >
+                  {t('应用到本容器', 'To Container')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyFrameSettingsToGroup(selectedImageSlot.id, 'doc', selectedImageSlot);
+                  }}
+                  className="py-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700/80 rounded font-medium transition text-center"
+                  title={t('应用当前选中的画框风格与比例到全简报所有图片', 'Apply frame style to all images in bulletin')}
+                >
+                  {t('全简报', 'All')}
+                </button>
+              </div>
+            </div>
+
             {/* 3 Tab Switcher */}
             <div className="grid grid-cols-3 gap-1 bg-zinc-950 p-1 rounded-md border border-zinc-800 text-[11px] font-bold">
               <button
@@ -706,16 +910,23 @@ export const RightInspector: React.FC = () => {
 
                 {/* Aspect Ratio */}
                 <div>
-                  <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                    {t('画幅比例', 'Aspect Ratio')}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-semibold text-zinc-400">
+                      {t('画幅比例', 'Aspect Ratio')}
+                    </label>
+                    {syncAllFramesInBlock && (
+                      <span className="text-[9px] text-blue-400 font-medium">
+                        {t('同步应用于本组', 'Syncing to block')}
+                      </span>
+                    )}
+                  </div>
                   <div className="grid grid-cols-6 gap-0.5 bg-zinc-950 p-0.5 rounded border border-zinc-800">
                     {ASPECT_RATIOS.map((ratio) => (
                       <button
                         key={ratio}
                         type="button"
                         onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
+                          updateSelectedSlotWithSync({
                             aspectRatio: ratio,
                           })
                         }
@@ -1017,7 +1228,7 @@ export const RightInspector: React.FC = () => {
                         key={preset.en}
                         type="button"
                         onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, preset.patch)
+                          updateSelectedSlotWithSync(preset.patch)
                         }
                         className="py-1 px-1.5 rounded text-[10px] font-semibold bg-zinc-950 hover:bg-zinc-700 text-zinc-200 border border-zinc-800 transition-colors"
                       >
@@ -1054,7 +1265,7 @@ export const RightInspector: React.FC = () => {
                                 key={r}
                                 type="button"
                                 onClick={() =>
-                                  updateImageSlotById(selectedImageSlot.id, {
+                                  updateSelectedSlotWithSync({
                                     frameRadius: r,
                                   })
                                 }
@@ -1079,7 +1290,7 @@ export const RightInspector: React.FC = () => {
                                 key={mp}
                                 type="button"
                                 onClick={() =>
-                                  updateImageSlotById(selectedImageSlot.id, {
+                                  updateSelectedSlotWithSync({
                                     frameMatPadding: mp,
                                   })
                                 }
@@ -1108,7 +1319,7 @@ export const RightInspector: React.FC = () => {
                                 key={bw}
                                 type="button"
                                 onClick={() =>
-                                  updateImageSlotById(selectedImageSlot.id, {
+                                  updateSelectedSlotWithSync({
                                     frameBorderWidth: bw,
                                   })
                                 }
@@ -1125,7 +1336,7 @@ export const RightInspector: React.FC = () => {
                               type="color"
                               value={selectedImageSlot.frameBorderColor || '#d4d4d8'}
                               onChange={(e) =>
-                                updateImageSlotById(selectedImageSlot.id, {
+                                updateSelectedSlotWithSync({
                                   frameBorderColor: e.target.value,
                                 })
                               }
@@ -1150,7 +1361,7 @@ export const RightInspector: React.FC = () => {
                                 key={sh.id}
                                 type="button"
                                 onClick={() =>
-                                  updateImageSlotById(selectedImageSlot.id, {
+                                  updateSelectedSlotWithSync({
                                     frameShadow: sh.id,
                                   })
                                 }
@@ -2074,71 +2285,39 @@ export const RightInspector: React.FC = () => {
                           </button>
                         </div>
 
-                        {/* Dynamic Layout Presets (Adaptive to photo count) */}
-                        {availablePresets.length > 0 && (
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <label className="text-[10px] font-semibold text-zinc-400">
-                                {photoCount} {t('图排版方案预设', 'Photo Layout Presets')}
-                              </label>
-                              <span className="text-[9px] text-blue-400 font-medium">
-                                {t('无缝自适应', 'Balanced Rows')}
+                        {/* Compact Photo & Layout Info Bar in Block Settings */}
+                        <div className="bg-zinc-950/70 p-2.5 rounded-lg border border-zinc-800 space-y-2">
+                          <div className="flex items-center justify-between text-xs font-semibold text-zinc-300">
+                            <span className="flex items-center gap-1.5 text-zinc-300">
+                              <LayoutGrid size={13} className="text-blue-400" />
+                              <span>{t('当前排版', 'Layout')}:</span>
+                              <span className="font-bold text-white text-[11px]">
+                                {lang === 'zh'
+                                  ? (availablePresets.find((p) => p.id === effectivePreset)?.labelZh || effectivePreset)
+                                  : (availablePresets.find((p) => p.id === effectivePreset)?.labelEn || effectivePreset)}
                               </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-1.5">
-                              {availablePresets.map((preset) => {
-                                const isCur = effectivePreset === preset.id;
-                                return (
-                                  <button
-                                    key={preset.id}
-                                    type="button"
-                                    onClick={() =>
-                                      updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                        ...prev,
-                                        layoutPreset: preset.id,
-                                        fitLastToMargin: true,
-                                      } as DatedEventBlock))
-                                    }
-                                    className={`p-2 rounded-lg text-left border transition ${
-                                      isCur
-                                        ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50 shadow-sm'
-                                        : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between mb-1">
-                                      <span className="text-[11px] font-bold">
-                                        {lang === 'zh' ? preset.labelZh : preset.labelEn}
-                                      </span>
-                                      {preset.isRecommended && (
-                                        <span className="text-[8px] bg-blue-500/30 text-blue-300 px-1 py-0.2 rounded font-medium">
-                                          {t('推荐', 'Fit')}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="space-y-0.5 pointer-events-none mb-1">
-                                      {preset.rows.map((rowCols, rIdx) => (
-                                        <div key={rIdx} className="flex gap-0.5 w-full">
-                                          {Array.from({ length: rowCols }).map((_, cIdx) => (
-                                            <div
-                                              key={cIdx}
-                                              className={`h-2 rounded-[1px] ${
-                                                isCur ? 'bg-blue-400' : 'bg-zinc-600'
-                                              }`}
-                                              style={{ flex: 1 }}
-                                            />
-                                          ))}
-                                        </div>
-                                      ))}
-                                    </div>
-                                    <p className="text-[9px] text-zinc-400 leading-tight">
-                                      {lang === 'zh' ? preset.descriptionZh : preset.descriptionEn}
-                                    </p>
-                                  </button>
-                                );
-                              })}
-                            </div>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (b.images[0]) {
+                                  selectImageSlot(b.images[0].id, selectedRoot.id, b.id);
+                                }
+                              }}
+                              className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-semibold transition"
+                              title={t('点击直接打开排版方案与画框细节工具', 'Click to open layout presets & frame styles')}
+                            >
+                              <ImageIcon size={11} />
+                              <span>{t('调整排版与画框', 'Layout & Frame')}</span>
+                            </button>
                           </div>
-                        )}
+                          <p className="text-[10px] text-zinc-400 leading-normal">
+                            {t(
+                              '💡 点击画报中的任意图片，即可在右侧直接切换排版方案（3+1、2×2、通栏等）并统一调节画框风格。',
+                              '💡 Click any photo on canvas to switch multi-photo layouts (3+1, 2x2, full width) and unify frame styles.'
+                            )}
+                          </p>
+                        </div>
 
                         {/* Standard Grid Columns (Kept intact with 1图 2图 3图 4图) */}
                         <div>

@@ -14,13 +14,27 @@ import {
 export const uid = (prefix = 'id') =>
   `${prefix}_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36).slice(-4)}`;
 
+export const DEMO_PHOTOS = [
+  '/demo/hero_industrial_park.jpg',
+  '/demo/csr_community_event.jpg',
+  '/demo/csr_community_support.jpg',
+  '/demo/employee_team_sports.jpg',
+];
+
+let photoCycle = 0;
+export const getNextDemoPhoto = () => {
+  const p = DEMO_PHOTOS[photoCycle % DEMO_PHOTOS.length];
+  photoCycle++;
+  return p;
+};
+
 export const createImageSlot = (
   aspectRatio: AspectRatioType = '4:3',
   label = 'IMAGE SLOT',
   url: string | null = null
 ): ImageSlotData => ({
   id: uid('img'),
-  url,
+  url: url || getNextDemoPhoto(),
   label,
   aspectRatio,
   zoom: 1,

@@ -331,7 +331,8 @@ export const App: React.FC = () => {
     try {
       setPreviewMode(true);
       setZoomPercent(100);
-      await new Promise((r) => setTimeout(r, 180));
+      await document.fonts?.ready;
+      await new Promise((r) => setTimeout(r, 220));
 
       const dataUrl = await domToPng(exportCanvasRef.current, {
         scale: 2,
@@ -367,7 +368,8 @@ export const App: React.FC = () => {
     try {
       setPreviewMode(true);
       setZoomPercent(100);
-      await new Promise((r) => setTimeout(r, 200));
+      await document.fonts?.ready;
+      await new Promise((r) => setTimeout(r, 260));
 
       // Scale: 3 generates razor-sharp 300+ DPI bitmap render
       const canvas = await domToCanvas(exportCanvasRef.current, {

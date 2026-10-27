@@ -47,6 +47,7 @@ export const HomeDashboard: React.FC = () => {
   const importDocumentJson = useBulletinStore((s) => s.importDocumentJson);
   const deleteTemplate = useBulletinStore((s) => s.deleteTemplate);
   const setCurrentView = useBulletinStore((s) => s.setCurrentView);
+  const resetToDemoBulletin = useBulletinStore((s) => s.resetToDemoBulletin);
 
   const filteredDocs = documents.filter((doc) => {
     const matchesSearch =
@@ -244,6 +245,27 @@ export const HomeDashboard: React.FC = () => {
             onChange={handleImportJsonFile}
             className="hidden"
           />
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                window.confirm(
+                  t(
+                    '确定要重置并恢复官方标准示范简报工程吗？（将清理当前临时草稿）',
+                    'Reset to clean official demo bulletin? (Cleans up current drafts)'
+                  )
+                )
+              ) {
+                resetToDemoBulletin();
+              }
+            }}
+            className="px-2.5 sm:px-3 py-1.5 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700/80 rounded-md text-xs font-semibold text-amber-300 hover:text-amber-200 flex items-center gap-1.5 transition-colors shadow-xs"
+            title={t('清理草稿并恢复官方示范简报', 'Restore Official Demo')}
+          >
+            <Sparkles size={13} />
+            <span className="hidden sm:inline">{t('恢复官方示范', 'Restore Demo')}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => jsonInputRef.current?.click()}
@@ -555,27 +577,28 @@ export const HomeDashboard: React.FC = () => {
                           >
                             <FileJson size={13} />
                           </button>
-                          {documents.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    t(
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const confirmMsg =
+                                documents.length <= 1
+                                  ? t(
+                                      `确定要删除《${doc.title}》并重置为全新官方示范工程吗？`,
+                                      `Delete "${doc.title}" and reset to clean official template?`
+                                    )
+                                  : t(
                                       `确定要删除《${doc.title}》吗？`,
                                       `Delete "${doc.title}"?`
-                                    )
-                                  )
-                                ) {
-                                  deleteDocument(doc.id);
-                                }
-                              }}
-                              title={t('删除简报', 'Delete')}
-                              className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
+                                    );
+                              if (window.confirm(confirmMsg)) {
+                                deleteDocument(doc.id);
+                              }
+                            }}
+                            title={t('删除简报', 'Delete')}
+                            className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       </div>
                     </div>

@@ -369,6 +369,8 @@ export const EditableText: React.FC<EditableTextProps> = ({
         style={{
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
+          overflowWrap: 'break-word',
+          lineHeight: '1.4',
           cursor: 'text',
           outline: isFocused ? '1.5px dashed rgba(37, 99, 235, 0.65)' : undefined,
           outlineOffset: '2px',
