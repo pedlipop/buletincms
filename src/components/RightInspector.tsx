@@ -715,6 +715,257 @@ export const RightInspector: React.FC = () => {
               </div>
             </div>
 
+            {/* Picture Frame Size & Alignment */}
+            <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-zinc-200">
+                  {t('画框尺寸与对齐', 'Frame Size & Alignment')}
+                </span>
+                {((selectedImageSlot.frameWidthMode && selectedImageSlot.frameWidthMode !== 'full') ||
+                  selectedImageSlot.frameHeightMode === 'custom_px' ||
+                  (selectedImageSlot.frameAlign && selectedImageSlot.frameAlign !== 'center')) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateImageSlotById(selectedImageSlot.id, {
+                        frameWidthMode: 'full',
+                        frameHeightMode: 'aspect',
+                        frameAlign: 'center',
+                        frameCustomWidthPx: undefined,
+                        frameCustomHeightPx: undefined,
+                      })
+                    }
+                    className="flex items-center gap-1 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
+                  >
+                    <RotateCcw size={10} />
+                    <span>{t('重置尺寸', 'Reset')}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Frame Width Modes */}
+              <div>
+                <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                  {t('画框宽度', 'Frame Width')}
+                </label>
+                <div className="grid grid-cols-4 gap-1">
+                  {(
+                    [
+                      { mode: 'full', label: '100%' },
+                      { mode: '75%', label: '75%' },
+                      { mode: '50%', label: '50%' },
+                      { mode: 'custom_px', label: t('像素', 'Custom') },
+                    ] as const
+                  ).map((item) => {
+                    const isSelectedMode =
+                      (selectedImageSlot.frameWidthMode || 'full') === item.mode;
+                    return (
+                      <button
+                        key={item.mode}
+                        type="button"
+                        onClick={() =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            frameWidthMode: item.mode,
+                            frameCustomWidthPx:
+                              item.mode === 'custom_px'
+                                ? selectedImageSlot.frameCustomWidthPx || 320
+                                : selectedImageSlot.frameCustomWidthPx,
+                          })
+                        }
+                        className={`py-1 rounded text-[10px] font-bold border ${
+                          isSelectedMode
+                            ? 'bg-blue-600 border-blue-400 text-white'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-500'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {selectedImageSlot.frameWidthMode === 'custom_px' && (
+                  <div className="mt-2 space-y-1 bg-zinc-950/60 p-2 rounded border border-zinc-800">
+                    <div className="flex justify-between text-[10px] text-zinc-400">
+                      <span>{t('自定义宽度 (px)', 'Custom Width (px)')}</span>
+                      <span className="font-mono text-zinc-200">
+                        {selectedImageSlot.frameCustomWidthPx || 320}px
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={80}
+                        max={800}
+                        step={10}
+                        value={selectedImageSlot.frameCustomWidthPx || 320}
+                        onChange={(e) =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            frameWidthMode: 'custom_px',
+                            frameCustomWidthPx: Number(e.target.value),
+                          })
+                        }
+                        className="flex-1 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+                      <input
+                        type="number"
+                        min={80}
+                        max={800}
+                        value={selectedImageSlot.frameCustomWidthPx || 320}
+                        onChange={(e) =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            frameWidthMode: 'custom_px',
+                            frameCustomWidthPx: Math.max(80, Math.min(800, Number(e.target.value))),
+                          })
+                        }
+                        className="w-14 bg-zinc-900 border border-zinc-700 rounded px-1.5 py-0.5 text-right font-mono text-[10px] text-zinc-200"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Frame Height Mode */}
+              <div>
+                <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                  {t('画框高度', 'Frame Height')}
+                </label>
+                <div className="grid grid-cols-2 gap-1 mb-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateImageSlotById(selectedImageSlot.id, {
+                        frameHeightMode: 'aspect',
+                      })
+                    }
+                    className={`py-1 rounded text-[10px] font-bold border ${
+                      (selectedImageSlot.frameHeightMode || 'aspect') === 'aspect'
+                        ? 'bg-blue-600 border-blue-400 text-white'
+                        : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-500'
+                    }`}
+                  >
+                    {t('按画幅比例', 'By Aspect Ratio')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateImageSlotById(selectedImageSlot.id, {
+                        frameHeightMode: 'custom_px',
+                        frameCustomHeightPx: selectedImageSlot.frameCustomHeightPx || 200,
+                      })
+                    }
+                    className={`py-1 rounded text-[10px] font-bold border ${
+                      selectedImageSlot.frameHeightMode === 'custom_px'
+                        ? 'bg-blue-600 border-blue-400 text-white'
+                        : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-500'
+                    }`}
+                  >
+                    {t('固定像素高度', 'Fixed Height (px)')}
+                  </button>
+                </div>
+
+                {selectedImageSlot.frameHeightMode === 'custom_px' && (
+                  <div className="space-y-1.5 bg-zinc-950/60 p-2 rounded border border-zinc-800">
+                    <div className="grid grid-cols-4 gap-1">
+                      {[120, 180, 240, 320].map((h) => (
+                        <button
+                          key={h}
+                          type="button"
+                          onClick={() =>
+                            updateImageSlotById(selectedImageSlot.id, {
+                              frameHeightMode: 'custom_px',
+                              frameCustomHeightPx: h,
+                            })
+                          }
+                          className={`py-0.5 rounded text-[9px] font-mono border ${
+                            selectedImageSlot.frameCustomHeightPx === h
+                              ? 'bg-blue-600 border-blue-400 text-white'
+                              : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                          }`}
+                        >
+                          {h}px
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex justify-between text-[10px] text-zinc-400">
+                      <span>{t('自定义高度 (px)', 'Custom Height (px)')}</span>
+                      <span className="font-mono text-zinc-200">
+                        {selectedImageSlot.frameCustomHeightPx || 200}px
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={60}
+                        max={600}
+                        step={10}
+                        value={selectedImageSlot.frameCustomHeightPx || 200}
+                        onChange={(e) =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            frameHeightMode: 'custom_px',
+                            frameCustomHeightPx: Number(e.target.value),
+                          })
+                        }
+                        className="flex-1 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+                      <input
+                        type="number"
+                        min={60}
+                        max={600}
+                        value={selectedImageSlot.frameCustomHeightPx || 200}
+                        onChange={(e) =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            frameHeightMode: 'custom_px',
+                            frameCustomHeightPx: Math.max(60, Math.min(600, Number(e.target.value))),
+                          })
+                        }
+                        className="w-14 bg-zinc-900 border border-zinc-700 rounded px-1.5 py-0.5 text-right font-mono text-[10px] text-zinc-200"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Frame Alignment */}
+              <div>
+                <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                  {t('画框对齐方式', 'Frame Alignment')}
+                </label>
+                <div className="grid grid-cols-3 gap-1">
+                  {(
+                    [
+                      { align: 'left', icon: AlignLeft, label: t('居左', 'Left') },
+                      { align: 'center', icon: AlignCenter, label: t('居中', 'Center') },
+                      { align: 'right', icon: AlignRight, label: t('居右', 'Right') },
+                    ] as const
+                  ).map((item) => {
+                    const isSelectedAlign =
+                      (selectedImageSlot.frameAlign || 'center') === item.align;
+                    const IconComp = item.icon;
+                    return (
+                      <button
+                        key={item.align}
+                        type="button"
+                        onClick={() =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            frameAlign: item.align,
+                          })
+                        }
+                        className={`py-1 flex items-center justify-center gap-1 rounded text-[10px] font-bold border ${
+                          isSelectedAlign
+                            ? 'bg-blue-600 border-blue-400 text-white'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-zinc-500'
+                        }`}
+                      >
+                        <IconComp size={11} />
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             {/* Arrange Picture Inside Frame (Zoom & Pan) */}
             <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2">
               <div className="flex items-center justify-between">

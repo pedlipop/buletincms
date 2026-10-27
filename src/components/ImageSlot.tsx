@@ -95,8 +95,11 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
   onRemoveSlot,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizingDims, setResizingDims] = useState<{ width: number; height: number } | null>(null);
   const [naturalRatio, setNaturalRatio] = useState<number | null>(null);
   const panStartRef = useRef<{ x: number; y: number; fx: number; fy: number } | null>(null);
 
@@ -119,6 +122,76 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
   const slotNumericRatio = isFreeRatio
     ? 1
     : ASPECT_NUMERIC_MAP[effectiveRatio] || 4 / 3;
+
+  // Frame width calculation
+  const widthMode = slot.frameWidthMode || 'full';
+  let frameWidthStyle = '100%';
+  if (widthMode === '75%') {
+    frameWidthStyle = '75%';
+  } else if (widthMode === '50%') {
+    frameWidthStyle = '50%';
+  } else if (widthMode === 'custom_pct' && slot.frameCustomWidthPct) {
+    frameWidthStyle = `${slot.frameCustomWidthPct}%`;
+  } else if (widthMode === 'custom_px' && slot.frameCustomWidthPx) {
+    frameWidthStyle = `${slot.frameCustomWidthPx}px`;
+  }
+
+  // Frame height calculation
+  const isCustomHeight = slot.frameHeightMode === 'custom_px' && !!slot.frameCustomHeightPx;
+  const customHeightPx = slot.frameCustomHeightPx;
+
+  // Frame alignment margin
+  const frameAlign = slot.frameAlign || 'center';
+  const alignMargin =
+    frameWidthStyle === '100%'
+      ? undefined
+      : frameAlign === 'center'
+      ? '0 auto'
+      : frameAlign === 'right'
+      ? '0 0 0 auto'
+      : '0 auto 0 0';
+
+  // Interactive frame resize drag handler
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!frameRef.current) return;
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = frameRef.current.getBoundingClientRect();
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+
+    setIsResizing(true);
+    setResizingDims({ width: Math.round(startWidth), height: Math.round(startHeight) });
+
+    const onMouseMove = (moveEv: MouseEvent) => {
+      const dx = moveEv.clientX - startX;
+      const dy = moveEv.clientY - startY;
+      const newWidth = Math.max(80, Math.min(800, Math.round(startWidth + dx)));
+      const newHeight = Math.max(60, Math.min(800, Math.round(startHeight + dy)));
+
+      setResizingDims({ width: newWidth, height: newHeight });
+
+      updateImageSlotById(slot.id, {
+        frameWidthMode: 'custom_px',
+        frameCustomWidthPx: newWidth,
+        frameHeightMode: 'custom_px',
+        frameCustomHeightPx: newHeight,
+      });
+    };
+
+    const onMouseUp = () => {
+      setIsResizing(false);
+      setResizingDims(null);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   // Compute custom frame radius, border, mat padding, and shadow
   const computedRadius =
@@ -249,6 +322,7 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
 
   return (
     <div
+      ref={frameRef}
       style={{
         padding: matPadding > 0 ? `${matPadding}px` : undefined,
         backgroundColor:
@@ -265,7 +339,9 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
           : customBorderCss || (!showActualImage ? '1px solid #a1a1aa' : 'none'),
         boxShadow: boxShadowCss,
         position: 'relative',
-        width: '100%',
+        width: frameWidthStyle,
+        maxWidth: '100%',
+        margin: alignMargin,
         overflow: 'visible',
       }}
       className={`group/imgslot ${className}`}
@@ -317,7 +393,12 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
           position: 'relative',
           zIndex: 2,
           width: '100%',
-          paddingBottom: isFreeRatio && showActualImage ? undefined : paddingBottom,
+          height: isCustomHeight ? `${customHeightPx}px` : undefined,
+          paddingBottom: isCustomHeight
+            ? undefined
+            : isFreeRatio && showActualImage
+            ? undefined
+            : paddingBottom,
           minHeight:
             minHeight
               ? `${minHeight}px`
@@ -621,6 +702,52 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
           </div>
         )}
       </div>
+
+      {/* Interactive Frame Resize Handle (bottom-right corner) */}
+      {!previewMode && isSelected && (
+        <div
+          title={t('拖拽调整画框尺寸', 'Drag to resize picture frame')}
+          onMouseDown={handleResizeStart}
+          style={{
+            position: 'absolute',
+            right: '-5px',
+            bottom: '-5px',
+            width: '12px',
+            height: '12px',
+            backgroundColor: '#2563eb',
+            border: '2px solid #ffffff',
+            borderRadius: '2px',
+            cursor: 'nwse-resize',
+            zIndex: 30,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+          }}
+        />
+      )}
+
+      {/* Live Dimension Badge during resize or when selected */}
+      {!previewMode && (isResizing || (isSelected && (slot.frameWidthMode === 'custom_px' || slot.frameHeightMode === 'custom_px'))) && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '-22px',
+            right: '0',
+            backgroundColor: '#18181b',
+            color: '#f4f4f5',
+            fontSize: '10px',
+            fontFamily: 'monospace',
+            padding: '1px 6px',
+            borderRadius: '3px',
+            pointerEvents: 'none',
+            zIndex: 35,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {resizingDims
+            ? `${resizingDims.width} × ${resizingDims.height}px`
+            : `${frameWidthStyle} × ${isCustomHeight ? `${customHeightPx}px` : effectiveRatio}`}
+        </div>
+      )}
 
       {/* Delete Slot Button */}
       {!previewMode && onRemoveSlot && (

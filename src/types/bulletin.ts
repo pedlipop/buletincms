@@ -55,6 +55,14 @@ export interface ImageSlotData {
   frameAssetScale?: number; // 0.5 to 2.5 (default 1)
   frameAssetX?: number; // -50 to 50 (%)
   frameAssetY?: number; // -50 to 50 (%)
+
+  // Frame Sizing & Alignment
+  frameWidthMode?: 'full' | '75%' | '50%' | 'custom_px' | 'custom_pct';
+  frameCustomWidthPx?: number;  // 80 to 800 px
+  frameCustomWidthPct?: number; // 20 to 100 %
+  frameHeightMode?: 'aspect' | 'custom_px'; // 'aspect' keeps ratio, 'custom_px' fixes height in px
+  frameCustomHeightPx?: number; // 60 to 800 px
+  frameAlign?: 'left' | 'center' | 'right';
 }
 
 export interface SectionTheme {
