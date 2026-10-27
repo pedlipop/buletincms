@@ -299,21 +299,44 @@ export const App: React.FC = () => {
         e.stopPropagation();
 
         const currentZoom = useBulletinStore.getState().zoomPercent;
-        const delta = -e.deltaY;
-        let newZoom: number;
-        if (Math.abs(delta) > 30) {
-          // Discrete mouse wheel notch (standard mouse)
-          newZoom = delta > 0 ? currentZoom + 10 : currentZoom - 10;
-        } else {
-          // Precision trackpad pinch
-          newZoom = Math.round(currentZoom + delta * 0.35);
+
+        // Normalize delta across all deltaMode types (pixels, lines, pages)
+        // On Windows, deltaMode === 1 (lines) sends deltaY = 1 or 3, which must be scaled
+        let rawDelta = -e.deltaY;
+        if (e.deltaMode === 1) {
+          rawDelta *= 40;
+        } else if (e.deltaMode === 2) {
+          rawDelta *= 400;
         }
+
+        // Determine zoom step: guaranteed minimum of 5% or 10%
+        let step = 10;
+        if (Math.abs(rawDelta) < 30) {
+          step = 5;
+        } else if (Math.abs(rawDelta) > 120) {
+          step = 15;
+        }
+
+        const newZoom = rawDelta > 0 ? currentZoom + step : currentZoom - step;
         setZoomPercent(newZoom);
       }
     };
 
-    window.addEventListener('wheel', onWheel, { passive: false });
-    return () => window.removeEventListener('wheel', onWheel);
+    const options = { passive: false, capture: true };
+    window.addEventListener('wheel', onWheel, options);
+    document.addEventListener('wheel', onWheel, options);
+    const canvasEl = mainCanvasRef.current;
+    if (canvasEl) {
+      canvasEl.addEventListener('wheel', onWheel, options);
+    }
+
+    return () => {
+      window.removeEventListener('wheel', onWheel, options);
+      document.removeEventListener('wheel', onWheel, options);
+      if (canvasEl) {
+        canvasEl.removeEventListener('wheel', onWheel, options);
+      }
+    };
   }, [currentView, setZoomPercent]);
 
   // Render Home Screen / Bulletin Library first before entering the Editor
