@@ -394,7 +394,8 @@ export const EditableText: React.FC<EditableTextProps> = ({
         style={{
           lineHeight: '1.4',
           cursor: 'text',
-          outline: isFocused ? '1.5px dashed rgba(37, 99, 235, 0.65)' : undefined,
+          caretColor: '#2563eb',
+          outline: isFocused ? '1.5px dashed rgba(37, 99, 235, 0.75)' : undefined,
           outlineOffset: '2px',
           borderRadius: isFocused ? '2px' : undefined,
           ...style,

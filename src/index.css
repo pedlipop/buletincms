@@ -28,6 +28,39 @@
   background: rgba(161, 161, 170, 0.45);
 }
 
+/* High-contrast vibrant text selection & cursor */
+::selection {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+::-moz-selection {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+/* Ensure contentEditable text areas and inputs have prominent blue cursor and clear selection */
+[contenteditable="true"],
+input[type="text"],
+input[type="number"],
+textarea {
+  caret-color: #2563eb !important;
+}
+
+[contenteditable="true"]::selection,
+[contenteditable="true"] *::selection {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  text-shadow: none !important;
+}
+
+[contenteditable="true"]::-moz-selection,
+[contenteditable="true"] *::-moz-selection {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  text-shadow: none !important;
+}
+
 /* Contenteditable placeholder support */
 [contenteditable="true"]:empty:before {
   content: attr(data-placeholder);
@@ -36,7 +69,7 @@
 }
 
 [contenteditable="true"]:focus {
-  outline: 1px dashed rgba(113, 113, 122, 0.6);
+  outline: 1.5px dashed rgba(37, 99, 235, 0.75);
   outline-offset: 2px;
   border-radius: 2px;
 }
