@@ -34,6 +34,7 @@ import { createImageSlot, SECTION_THEMES } from '../data/presets';
 import { DragPayload, useBulletinStore } from '../store/useBulletinStore';
 import { EditableText } from './EditableText';
 import { ImageSlot } from './ImageSlot';
+import { resolveLayoutRows } from '../utils/photoLayout';
 
 // =======================================================
 // INLINE SUB-ELEMENT DELETE WRAPPER
@@ -759,73 +760,12 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
         );
 
         const count = b.images.length;
-        // Resolve effective layout preset
-        let effectivePreset: PhotoLayoutPreset = b.layoutPreset || 'auto';
-        if (effectivePreset === 'auto') {
-          if (count === 4) {
-            effectivePreset = b.fitLastToMargin || b.gridColumns === 3 ? '3_plus_1' : b.gridColumns === 2 ? '2x2' : '3_plus_1';
-          } else if (count === 3) {
-            effectivePreset = b.fitLastToMargin || b.gridColumns === 2 ? '2_plus_1' : '3_cols';
-          } else if (count === 2) {
-            effectivePreset = b.gridColumns === 1 ? '1_col' : '2_cols';
-          } else if (count === 1) {
-            effectivePreset = '1_col';
-          } else if (count === 5) {
-            effectivePreset = '3_plus_2';
-          } else {
-            effectivePreset = b.gridColumns === 2 ? '2_cols' : b.gridColumns === 4 ? '4_cols' : '3_cols';
-          }
-        }
-
-        let containerGridCols = `repeat(${b.gridColumns || 3}, minmax(0, 1fr))`;
-        if (effectivePreset === '3_plus_1' || effectivePreset === '1_plus_3' || effectivePreset === '3_cols') {
-          containerGridCols = 'repeat(3, minmax(0, 1fr))';
-        } else if (effectivePreset === '2x2' || effectivePreset === '2_plus_1' || effectivePreset === '1_plus_2' || effectivePreset === '2_cols') {
-          containerGridCols = 'repeat(2, minmax(0, 1fr))';
-        } else if (effectivePreset === '3_plus_2' || effectivePreset === '2_plus_3') {
-          containerGridCols = 'repeat(6, minmax(0, 1fr))';
-        } else if (effectivePreset === '4_plus_1' || effectivePreset === '1_plus_4' || effectivePreset === '4_cols') {
-          containerGridCols = 'repeat(4, minmax(0, 1fr))';
-        } else if (effectivePreset === '1_col' || effectivePreset === 'stacked') {
-          containerGridCols = '1fr';
-        }
-
-        const getItemColStyle = (idx: number): React.CSSProperties => {
-          if (effectivePreset === '3_plus_1' && count === 4) {
-            return idx === 3 ? { gridColumn: '1 / -1', width: '100%' } : { gridColumn: 'span 1' };
-          }
-          if (effectivePreset === '1_plus_3' && count === 4) {
-            return idx === 0 ? { gridColumn: '1 / -1', width: '100%' } : { gridColumn: 'span 1' };
-          }
-          if (effectivePreset === '2x2' && count === 4) {
-            return { gridColumn: 'span 1' };
-          }
-          if (effectivePreset === '2_plus_1' && count === 3) {
-            return idx === 2 ? { gridColumn: '1 / -1', width: '100%' } : { gridColumn: 'span 1' };
-          }
-          if (effectivePreset === '1_plus_2' && count === 3) {
-            return idx === 0 ? { gridColumn: '1 / -1', width: '100%' } : { gridColumn: 'span 1' };
-          }
-          if (effectivePreset === '3_plus_2' && count === 5) {
-            return idx < 3 ? { gridColumn: 'span 2' } : { gridColumn: 'span 3' };
-          }
-          if (effectivePreset === '2_plus_3' && count === 5) {
-            return idx < 2 ? { gridColumn: 'span 3' } : { gridColumn: 'span 2' };
-          }
-          if (effectivePreset === '4_plus_1' && count === 5) {
-            return idx === 4 ? { gridColumn: '1 / -1', width: '100%' } : { gridColumn: 'span 1' };
-          }
-          if (effectivePreset === '1_plus_4' && count === 5) {
-            return idx === 0 ? { gridColumn: '1 / -1', width: '100%' } : { gridColumn: 'span 1' };
-          }
-          if (effectivePreset === '1_col' || effectivePreset === 'stacked') {
-            return { gridColumn: '1 / -1', width: '100%' };
-          }
-          if (b.fitLastToMargin && idx === count - 1 && count % (b.gridColumns || 3) !== 0) {
-            return { gridColumn: '1 / -1', width: '100%' };
-          }
-          return { gridColumn: 'span 1' };
-        };
+        const layoutRows = resolveLayoutRows(
+          count,
+          b.layoutPreset,
+          b.gridColumns,
+          b.fitLastToMargin !== false
+        );
 
         const handleAddPhoto = () => {
           const demoUrls = [
@@ -840,8 +780,10 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
             createImageSlot(b.imageAspectRatio || '4:3', `PHOTO ${b.images.length + 1}`, nextUrl),
           ];
           let nextPreset = b.layoutPreset;
-          if (nextImgs.length === 4 && (!nextPreset || nextPreset === '3_cols' || nextPreset === 'auto')) {
-            nextPreset = '3_plus_1';
+          if (nextImgs.length === 4 && (!nextPreset || nextPreset === 'auto')) {
+            nextPreset = '2x2';
+          } else if (nextImgs.length === 6 && (!nextPreset || nextPreset === 'auto')) {
+            nextPreset = '3x2';
           }
           updateSelf({
             images: nextImgs,
@@ -851,29 +793,54 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
         };
 
         const imageGridSection = showImages && (
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" style={{ width: '100%' }}>
             {count > 0 && (
               <div
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: containerGridCols,
+                  display: 'flex',
+                  flexDirection: 'column',
                   gap: '6px',
+                  width: '100%',
                 }}
               >
-                {b.images.map((imgSlot, idx) => (
-                  <div key={imgSlot.id} style={getItemColStyle(idx)}>
-                    <ImageSlot
-                      slot={imgSlot}
-                      rootBlockId={sectionId}
-                      childBlockId={b.id}
-                      onRemoveSlot={() => {
-                        const nextImgs = b.images.filter((_, i) => i !== idx);
-                        updateSelf({
-                          images: nextImgs,
-                          showImages: nextImgs.length > 0,
-                        });
-                      }}
-                    />
+                {layoutRows.map((rowIndices, rowIdx) => (
+                  <div
+                    key={`row-${rowIdx}`}
+                    style={{
+                      display: 'flex',
+                      gap: '6px',
+                      width: '100%',
+                      alignItems: 'stretch',
+                    }}
+                  >
+                    {rowIndices.map((idx) => {
+                      const imgSlot = b.images[idx];
+                      if (!imgSlot) return null;
+                      return (
+                        <div
+                          key={imgSlot.id}
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                          }}
+                        >
+                          <ImageSlot
+                            slot={imgSlot}
+                            rootBlockId={sectionId}
+                            childBlockId={b.id}
+                            onRemoveSlot={() => {
+                              const nextImgs = b.images.filter((_, i) => i !== idx);
+                              updateSelf({
+                                images: nextImgs,
+                                showImages: nextImgs.length > 0,
+                              });
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>

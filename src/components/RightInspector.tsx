@@ -60,6 +60,7 @@ import {
   useBulletinStore,
 } from '../store/useBulletinStore';
 import { compressImageFile } from './ImageSlot';
+import { getPresetsForCount } from '../utils/photoLayout';
 
 const ASPECT_RATIOS: AspectRatioType[] = [
   'free',
@@ -2001,15 +2002,21 @@ export const RightInspector: React.FC = () => {
 
                   {b.showImages !== false && (() => {
                     const photoCount = b.images.length;
-                    const effectivePreset: PhotoLayoutPreset = b.layoutPreset || (
-                      photoCount === 4 && (b.fitLastToMargin || b.gridColumns === 3)
-                        ? '3_plus_1'
-                        : photoCount === 4 && b.gridColumns === 2
-                        ? '2x2'
-                        : photoCount === 3 && b.fitLastToMargin
-                        ? '2_plus_1'
-                        : (b.gridColumns === 1 ? '1_col' : b.gridColumns === 2 ? '2_cols' : b.gridColumns === 3 ? '3_cols' : '4_cols')
-                    );
+                    const availablePresets = getPresetsForCount(photoCount);
+                    let effectivePreset: PhotoLayoutPreset = b.layoutPreset || 'auto';
+                    if (effectivePreset === 'auto') {
+                      if (photoCount === 6) {
+                        effectivePreset = b.gridColumns === 4 ? '4_plus_2' : b.gridColumns === 2 ? '2x3' : '3x2';
+                      } else if (photoCount === 4) {
+                        effectivePreset = b.fitLastToMargin || b.gridColumns === 3 ? '3_plus_1' : b.gridColumns === 2 ? '2x2' : '3_plus_1';
+                      } else if (photoCount === 3) {
+                        effectivePreset = b.fitLastToMargin || b.gridColumns === 2 ? '2_plus_1' : '3_cols';
+                      } else if (photoCount === 5) {
+                        effectivePreset = '3_plus_2';
+                      } else if (availablePresets[0]) {
+                        effectivePreset = availablePresets[0].id;
+                      }
+                    }
 
                     const demoUrls = [
                       '/demo/hero_industrial_park.jpg',
@@ -2031,15 +2038,17 @@ export const RightInspector: React.FC = () => {
                           ),
                         ];
                         let nextPreset = cur.layoutPreset;
-                        if (nextImgs.length === 4 && (!nextPreset || nextPreset === '3_cols' || nextPreset === 'auto')) {
-                          nextPreset = '3_plus_1';
+                        if (nextImgs.length === 4 && (!nextPreset || nextPreset === 'auto')) {
+                          nextPreset = '2x2';
+                        } else if (nextImgs.length === 6 && (!nextPreset || nextPreset === 'auto')) {
+                          nextPreset = '3x2';
                         }
                         return {
                           ...cur,
                           images: nextImgs,
                           showImages: true,
                           layoutPreset: nextPreset,
-                          fitLastToMargin: nextImgs.length === 4 ? true : cur.fitLastToMargin,
+                          fitLastToMargin: true,
                         };
                       });
                     };
@@ -2065,336 +2074,68 @@ export const RightInspector: React.FC = () => {
                           </button>
                         </div>
 
-                        {/* Layout Presets (Adaptive to photo count) */}
-                        {photoCount === 4 && (
+                        {/* Dynamic Layout Presets (Adaptive to photo count) */}
+                        {availablePresets.length > 0 && (
                           <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
                               <label className="text-[10px] font-semibold text-zinc-400">
-                                {t('四图排版预设 (4-Photo Layouts)', '4-Photo Layout Presets')}
+                                {photoCount} {t('图排版方案预设', 'Photo Layout Presets')}
                               </label>
                               <span className="text-[9px] text-blue-400 font-medium">
-                                {t('自适应边距', 'Fit Margins')}
+                                {t('无缝自适应', 'Balanced Rows')}
                               </span>
                             </div>
                             <div className="grid grid-cols-2 gap-1.5">
-                              {/* 3 + 1 底部通栏 (FIT TO MARGIN) */}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                    ...prev,
-                                    layoutPreset: '3_plus_1',
-                                    gridColumns: 3,
-                                    fitLastToMargin: true,
-                                  } as DatedEventBlock))
-                                }
-                                className={`p-2 rounded-lg text-left border transition ${
-                                  effectivePreset === '3_plus_1'
-                                    ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50 shadow-sm'
-                                    : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-[11px] font-bold">3 + 1 {t('底部通栏', 'Bottom Fit')}</span>
-                                  <span className="text-[8px] bg-blue-500/30 text-blue-300 px-1 py-0.2 rounded font-medium">
-                                    {t('推荐', 'Fit')}
-                                  </span>
-                                </div>
-                                <div className="space-y-0.5 pointer-events-none mb-1">
-                                  <div className="grid grid-cols-3 gap-0.5">
-                                    <div className="h-2 rounded-[1px] bg-blue-400/60" />
-                                    <div className="h-2 rounded-[1px] bg-blue-400/60" />
-                                    <div className="h-2 rounded-[1px] bg-blue-400/60" />
-                                  </div>
-                                  <div className="h-2.5 rounded-[1px] bg-blue-400 w-full" />
-                                </div>
-                                <p className="text-[9px] text-zinc-400 leading-tight">
-                                  {t('前3图并排，第4图撑满两端边距', '3 on top, 4th spans full margin')}
-                                </p>
-                              </button>
-
-                              {/* 2 x 2 均衡矩阵 */}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                    ...prev,
-                                    layoutPreset: '2x2',
-                                    gridColumns: 2,
-                                    fitLastToMargin: false,
-                                  } as DatedEventBlock))
-                                }
-                                className={`p-2 rounded-lg text-left border transition ${
-                                  effectivePreset === '2x2'
-                                    ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50 shadow-sm'
-                                    : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-[11px] font-bold">2 × 2 {t('均衡矩阵', 'Balanced 2x2')}</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-0.5 pointer-events-none mb-1">
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                </div>
-                                <p className="text-[9px] text-zinc-400 leading-tight">
-                                  {t('四图对称等宽两行矩阵', '4 balanced equal tiles')}
-                                </p>
-                              </button>
-
-                              {/* 1 + 3 顶部通栏 */}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                    ...prev,
-                                    layoutPreset: '1_plus_3',
-                                    gridColumns: 3,
-                                    fitLastToMargin: false,
-                                  } as DatedEventBlock))
-                                }
-                                className={`p-2 rounded-lg text-left border transition ${
-                                  effectivePreset === '1_plus_3'
-                                    ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50 shadow-sm'
-                                    : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-[11px] font-bold">1 + 3 {t('顶部通栏', 'Top Hero')}</span>
-                                </div>
-                                <div className="space-y-0.5 pointer-events-none mb-1">
-                                  <div className="h-2.5 rounded-[1px] bg-zinc-500/60 w-full" />
-                                  <div className="grid grid-cols-3 gap-0.5">
-                                    <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                    <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                    <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                  </div>
-                                </div>
-                                <p className="text-[9px] text-zinc-400 leading-tight">
-                                  {t('首图通栏全宽，下排3小图', 'Top hero banner, 3 tiles below')}
-                                </p>
-                              </button>
-
-                              {/* 4 列横排 */}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                    ...prev,
-                                    layoutPreset: '4_cols',
-                                    gridColumns: 4,
-                                    fitLastToMargin: false,
-                                  } as DatedEventBlock))
-                                }
-                                className={`p-2 rounded-lg text-left border transition ${
-                                  effectivePreset === '4_cols'
-                                    ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50 shadow-sm'
-                                    : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-[11px] font-bold">4 {t('列单行并列', 'in 1 Row')}</span>
-                                </div>
-                                <div className="grid grid-cols-4 gap-0.5 pointer-events-none mb-1">
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                </div>
-                                <p className="text-[9px] text-zinc-400 leading-tight">
-                                  {t('单行四图并排平铺', 'Horizontal 4-pic row')}
-                                </p>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {photoCount === 3 && (
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-semibold text-zinc-400">
-                              {t('三图排版预设 (3-Photo Layouts)', '3-Photo Layout Presets')}
-                            </label>
-                            <div className="grid grid-cols-3 gap-1.5">
-                              {/* 3列等宽 */}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                    ...prev,
-                                    layoutPreset: '3_cols',
-                                    gridColumns: 3,
-                                    fitLastToMargin: false,
-                                  } as DatedEventBlock))
-                                }
-                                className={`p-1.5 rounded-lg text-left border transition ${
-                                  effectivePreset === '3_cols'
-                                    ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50'
-                                    : 'bg-zinc-900 border-zinc-800 text-zinc-300'
-                                }`}
-                              >
-                                <span className="block text-[11px] font-bold mb-1">3 {t('列等宽', 'Cols')}</span>
-                                <div className="grid grid-cols-3 gap-0.5 pointer-events-none">
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                </div>
-                              </button>
-
-                              {/* 2+1 底部通栏 */}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                    ...prev,
-                                    layoutPreset: '2_plus_1',
-                                    gridColumns: 2,
-                                    fitLastToMargin: true,
-                                  } as DatedEventBlock))
-                                }
-                                className={`p-1.5 rounded-lg text-left border transition ${
-                                  effectivePreset === '2_plus_1'
-                                    ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50'
-                                    : 'bg-zinc-900 border-zinc-800 text-zinc-300'
-                                }`}
-                              >
-                                <span className="block text-[11px] font-bold mb-1">2+1 {t('底图通栏', 'Bottom Fit')}</span>
-                                <div className="space-y-0.5 pointer-events-none">
-                                  <div className="grid grid-cols-2 gap-0.5">
-                                    <div className="h-1.5 rounded-[1px] bg-zinc-500/60" />
-                                    <div className="h-1.5 rounded-[1px] bg-zinc-500/60" />
-                                  </div>
-                                  <div className="h-1.5 rounded-[1px] bg-blue-400 w-full" />
-                                </div>
-                              </button>
-
-                              {/* 1+2 顶部通栏 */}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                    ...prev,
-                                    layoutPreset: '1_plus_2',
-                                    gridColumns: 2,
-                                    fitLastToMargin: false,
-                                  } as DatedEventBlock))
-                                }
-                                className={`p-1.5 rounded-lg text-left border transition ${
-                                  effectivePreset === '1_plus_2'
-                                    ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50'
-                                    : 'bg-zinc-900 border-zinc-800 text-zinc-300'
-                                }`}
-                              >
-                                <span className="block text-[11px] font-bold mb-1">1+2 {t('顶图通栏', 'Top Hero')}</span>
-                                <div className="space-y-0.5 pointer-events-none">
-                                  <div className="h-1.5 rounded-[1px] bg-blue-400 w-full" />
-                                  <div className="grid grid-cols-2 gap-0.5">
-                                    <div className="h-1.5 rounded-[1px] bg-zinc-500/60" />
-                                    <div className="h-1.5 rounded-[1px] bg-zinc-500/60" />
-                                  </div>
-                                </div>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {photoCount === 2 && (
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-semibold text-zinc-400">
-                              {t('双图排版预设 (2-Photo Layouts)', '2-Photo Layout Presets')}
-                            </label>
-                            <div className="grid grid-cols-2 gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                    ...prev,
-                                    layoutPreset: '2_cols',
-                                    gridColumns: 2,
-                                    fitLastToMargin: false,
-                                  } as DatedEventBlock))
-                                }
-                                className={`p-2 rounded-lg text-left border transition ${
-                                  effectivePreset === '2_cols'
-                                    ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50'
-                                    : 'bg-zinc-900 border-zinc-800 text-zinc-300'
-                                }`}
-                              >
-                                <span className="block text-[11px] font-bold mb-1">2 {t('列并排', 'Side-by-Side')}</span>
-                                <div className="grid grid-cols-2 gap-0.5 pointer-events-none">
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60" />
-                                </div>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                    ...prev,
-                                    layoutPreset: '1_col',
-                                    gridColumns: 1,
-                                    fitLastToMargin: false,
-                                  } as DatedEventBlock))
-                                }
-                                className={`p-2 rounded-lg text-left border transition ${
-                                  effectivePreset === '1_col'
-                                    ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50'
-                                    : 'bg-zinc-900 border-zinc-800 text-zinc-300'
-                                }`}
-                              >
-                                <span className="block text-[11px] font-bold mb-1">1 {t('列纵排', 'Stacked')}</span>
-                                <div className="space-y-0.5 pointer-events-none">
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60 w-full" />
-                                  <div className="h-2 rounded-[1px] bg-zinc-500/60 w-full" />
-                                </div>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {photoCount >= 5 && (
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-semibold text-zinc-400">
-                              {t('多图均衡预设 (Multi-Photo Layouts)', 'Multi-Photo Layout Presets')}
-                            </label>
-                            <div className="grid grid-cols-2 gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                    ...prev,
-                                    layoutPreset: '3_plus_2',
-                                    fitLastToMargin: true,
-                                  } as DatedEventBlock))
-                                }
-                                className={`p-2 rounded-lg text-left border transition ${
-                                  effectivePreset === '3_plus_2'
-                                    ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50'
-                                    : 'bg-zinc-900 border-zinc-800 text-zinc-300'
-                                }`}
-                              >
-                                <span className="block text-[11px] font-bold mb-0.5">3 + 2 {t('均衡矩阵', '3 Top + 2 Bottom')}</span>
-                                <p className="text-[9px] text-zinc-400">{t('两行各撑满边距', 'Both rows fit margins')}</p>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                                    ...prev,
-                                    layoutPreset: '4_plus_1',
-                                    fitLastToMargin: true,
-                                  } as DatedEventBlock))
-                                }
-                                className={`p-2 rounded-lg text-left border transition ${
-                                  effectivePreset === '4_plus_1'
-                                    ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50'
-                                    : 'bg-zinc-900 border-zinc-800 text-zinc-300'
-                                }`}
-                              >
-                                <span className="block text-[11px] font-bold mb-0.5">4 + 1 {t('底图通栏', 'Bottom Fit')}</span>
-                                <p className="text-[9px] text-zinc-400">{t('末图撑满通栏边距', 'Last photo fits margin')}</p>
-                              </button>
+                              {availablePresets.map((preset) => {
+                                const isCur = effectivePreset === preset.id;
+                                return (
+                                  <button
+                                    key={preset.id}
+                                    type="button"
+                                    onClick={() =>
+                                      updateContentBlock(selectedRoot.id, b.id, (prev) => ({
+                                        ...prev,
+                                        layoutPreset: preset.id,
+                                        fitLastToMargin: true,
+                                      } as DatedEventBlock))
+                                    }
+                                    className={`p-2 rounded-lg text-left border transition ${
+                                      isCur
+                                        ? 'bg-blue-950/60 border-blue-500 text-white ring-1 ring-blue-500/50 shadow-sm'
+                                        : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-[11px] font-bold">
+                                        {lang === 'zh' ? preset.labelZh : preset.labelEn}
+                                      </span>
+                                      {preset.isRecommended && (
+                                        <span className="text-[8px] bg-blue-500/30 text-blue-300 px-1 py-0.2 rounded font-medium">
+                                          {t('推荐', 'Fit')}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="space-y-0.5 pointer-events-none mb-1">
+                                      {preset.rows.map((rowCols, rIdx) => (
+                                        <div key={rIdx} className="flex gap-0.5 w-full">
+                                          {Array.from({ length: rowCols }).map((_, cIdx) => (
+                                            <div
+                                              key={cIdx}
+                                              className={`h-2 rounded-[1px] ${
+                                                isCur ? 'bg-blue-400' : 'bg-zinc-600'
+                                              }`}
+                                              style={{ flex: 1 }}
+                                            />
+                                          ))}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <p className="text-[9px] text-zinc-400 leading-tight">
+                                      {lang === 'zh' ? preset.descriptionZh : preset.descriptionEn}
+                                    </p>
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         )}

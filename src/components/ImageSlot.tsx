@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
+  GripVertical,
   Image as ImageIcon,
   Move,
   RotateCcw,
@@ -111,6 +112,11 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
   const wireframeMode = useBulletinStore((s) => s.getActiveDoc().wireframeMode);
   const selectImageSlot = useBulletinStore((s) => s.selectImageSlot);
   const updateImageSlotById = useBulletinStore((s) => s.updateImageSlotById);
+  const reorderBlockImages = useBulletinStore((s) => s.reorderBlockImages);
+
+  const [isReorderDragOver, setIsReorderDragOver] = useState(false);
+  const [isDraggingSelf, setIsDraggingSelf] = useState(false);
+  const lastClickTimeRef = useRef<number>(0);
 
   const isSelected = !previewMode && selectedImageSlotId === slot.id;
   const effectiveRatio: AspectRatioType =
@@ -230,25 +236,70 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
   };
 
   const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    setIsReorderDragOver(false);
+
+    // 1. Reorder dropped photo from within the bulletin
+    const sourceSlotId =
+      e.dataTransfer.getData('application/buletin-slot-id') ||
+      e.dataTransfer.getData('text/plain');
+    if (sourceSlotId && sourceSlotId.startsWith('img_') && sourceSlotId !== slot.id) {
+      reorderBlockImages(sourceSlotId, slot.id);
+      selectImageSlot(slot.id, rootBlockId, childBlockId);
+      return;
+    }
+
+    // 2. Local image file dropped from system
     const file = e.dataTransfer.files?.[0];
     if (!file || !file.type.startsWith('image/')) {
       return;
     }
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingOver(false);
     if (previewMode) return;
     const dataUrl = await compressImageFile(file);
     updateImageSlotById(slot.id, { url: dataUrl });
     selectImageSlot(slot.id, rootBlockId, childBlockId);
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleDragOver = (e: React.DragEvent) => {
+    if (previewMode) return;
+    if (e.dataTransfer.types.includes('application/buletin-slot-id')) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsReorderDragOver(true);
+    } else if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDraggingOver(true);
+    }
+  };
+
+  const handleSlotClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (previewMode) return;
+    const now = Date.now();
+    if (now - lastClickTimeRef.current < 350) {
+      // Rapid double click opens upload window directly!
+      fileInputRef.current?.click();
+      lastClickTimeRef.current = 0;
+      return;
+    }
+    lastClickTimeRef.current = now;
     selectImageSlot(slot.id, rootBlockId, childBlockId);
+  };
 
-    if (slot.url && !wireframeMode && e.button === 0) {
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (previewMode) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (previewMode) return;
+
+    // Pan image focal point when mouse 1 is clicked on a loaded image that is zoomed
+    if (slot.url && !wireframeMode && e.button === 0 && slot.zoom > 1) {
       setIsPanning(true);
       panStartRef.current = {
         x: e.clientX,
@@ -261,6 +312,9 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
         if (!panStartRef.current) return;
         const dx = moveEv.clientX - panStartRef.current.x;
         const dy = moveEv.clientY - panStartRef.current.y;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+          lastClickTimeRef.current = 0;
+        }
         const nextX = Math.max(0, Math.min(100, Math.round(panStartRef.current.fx - dx * 0.35)));
         const nextY = Math.max(0, Math.min(100, Math.round(panStartRef.current.fy - dy * 0.35)));
         updateImageSlotById(slot.id, {
@@ -323,6 +377,26 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
   return (
     <div
       ref={frameRef}
+      draggable={!previewMode && !isPanning && !isResizing}
+      onDragStart={(e) => {
+        if (previewMode || isPanning || isResizing) {
+          e.preventDefault();
+          return;
+        }
+        e.dataTransfer.setData('application/buletin-slot-id', slot.id);
+        e.dataTransfer.setData('text/plain', slot.id);
+        e.dataTransfer.effectAllowed = 'move';
+        setIsDraggingSelf(true);
+      }}
+      onDragEnd={() => setIsDraggingSelf(false)}
+      onDragOver={handleDragOver}
+      onDragLeave={() => {
+        setIsDraggingOver(false);
+        setIsReorderDragOver(false);
+      }}
+      onDrop={handleDrop}
+      onClick={handleSlotClick}
+      onDoubleClick={handleDoubleClick}
       style={{
         padding: matPadding > 0 ? `${matPadding}px` : undefined,
         backgroundColor:
@@ -334,6 +408,8 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
         borderRadius: computedRadius,
         border: isSelected
           ? '2px solid #2563eb'
+          : isReorderDragOver
+          ? '2px dashed #2563eb'
           : isDraggingOver
           ? '2px dashed #2563eb'
           : customBorderCss || (!showActualImage ? '1px solid #a1a1aa' : 'none'),
@@ -343,9 +419,63 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
         maxWidth: '100%',
         margin: alignMargin,
         overflow: 'visible',
+        opacity: isDraggingSelf ? 0.45 : 1,
       }}
       className={`group/imgslot ${className}`}
     >
+      {/* Visual Drop to Reorder Overlay */}
+      {isReorderDragOver && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 35,
+            backgroundColor: 'rgba(37, 99, 235, 0.28)',
+            border: '2px dashed #3b82f6',
+            borderRadius: computedRadius,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          <span
+            style={{
+              backgroundColor: '#1d4ed8',
+              color: '#ffffff',
+              fontSize: '10px',
+              fontWeight: 700,
+              padding: '4px 10px',
+              borderRadius: '9999px',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+            }}
+          >
+            {t('释放以互换/重排顺序', 'Drop to Reorder')}
+          </span>
+        </div>
+      )}
+
+      {/* Top-Left Drag Reorder Handle */}
+      {!previewMode && (
+        <div
+          draggable
+          title={t('按住拖拽互换/重排图片顺序', 'Drag to reorder photos')}
+          onDragStart={(e) => {
+            e.stopPropagation();
+            e.dataTransfer.setData('application/buletin-slot-id', slot.id);
+            e.dataTransfer.setData('text/plain', slot.id);
+            e.dataTransfer.effectAllowed = 'move';
+            setIsDraggingSelf(true);
+          }}
+          onDragEnd={() => setIsDraggingSelf(false)}
+          className={`absolute top-1 left-1 z-20 p-0.5 rounded bg-black/60 hover:bg-blue-600 text-white/90 hover:text-white cursor-grab active:cursor-grabbing transition-opacity shadow-xs ${
+            isSelected ? 'opacity-100' : 'opacity-0 group-hover/imgslot:opacity-100'
+          }`}
+        >
+          <GripVertical size={11} />
+        </div>
+      )}
+
       {/* Custom Frame Asset BEHIND the Picture Frame (Default) */}
       {hasCustomFrameAsset && frameLayer === 'behind' && (
         <img
@@ -367,27 +497,14 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
       )}
 
       <div
-        onClick={(e) => {
-          e.stopPropagation();
-          if (!previewMode) {
-            selectImageSlot(slot.id, rootBlockId, childBlockId);
-          }
-        }}
-        onDoubleClick={(e) => {
-          e.stopPropagation();
-          if (!previewMode) {
-            fileInputRef.current?.click();
-          }
-        }}
+        onClick={handleSlotClick}
+        onDoubleClick={handleDoubleClick}
         onMouseDown={handleMouseDown}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('Files')) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!previewMode) setIsDraggingOver(true);
-          }
+        onDragOver={handleDragOver}
+        onDragLeave={() => {
+          setIsDraggingOver(false);
+          setIsReorderDragOver(false);
         }}
-        onDragLeave={() => setIsDraggingOver(false)}
         onDrop={handleDrop}
         style={{
           position: 'relative',
@@ -434,8 +551,8 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
             ? undefined
             : showActualImage
             ? t(
-                '按住拖拽可移动画面位置 · 双击更换图片',
-                'Drag to move image inside frame · Double-click to replace'
+                '双击更换图片 · 拖拽左上角把手重排顺序 · 按住放大可平移画面',
+                'Double-click to replace · Drag top-left handle to reorder · Pan when zoomed'
               )
             : t(
                 '点击设置画框 · 双击或拖入图片上传',
@@ -581,123 +698,163 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
           </div>
         )}
 
-        {/* On-Canvas Floating Mini Controls when Selected */}
+        {/* On-Canvas Floating Mini Controls when Selected - CENTERED IN THE MIDDLE */}
         {isSelected && (
           <div
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             style={{
               position: 'absolute',
-              bottom: '4px',
-              left: '4px',
-              right: '4px',
-              zIndex: 22,
+              bottom: '8px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 25,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              justifyContent: 'center',
               gap: '4px',
               pointerEvents: 'auto',
+              maxWidth: 'calc(100% - 16px)',
+              whiteSpace: 'nowrap',
             }}
           >
-            {showActualImage ? (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '2px',
-                  backgroundColor: 'rgba(24, 24, 27, 0.92)',
-                  color: '#ffffff',
-                  fontSize: '9px',
-                  fontWeight: 600,
-                  padding: '2px 5px',
-                  borderRadius: '4px',
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.35)',
-                }}
-              >
-                <Move size={9} style={{ color: '#60a5fa', marginRight: '2px' }} />
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateImageSlotById(slot.id, {
-                      zoom: Math.max(0.5, Number((slot.zoom - 0.1).toFixed(2))),
-                    })
-                  }
-                  title={t('缩小画面', 'Zoom Out')}
-                  style={{
-                    padding: '1px 3px',
-                    cursor: 'pointer',
-                    color: '#e4e4e7',
-                  }}
-                >
-                  <ZoomOut size={10} />
-                </button>
-                <span style={{ fontFamily: 'monospace', minWidth: '28px', textAlign: 'center' }}>
-                  {Math.round(slot.zoom * 100)}%
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateImageSlotById(slot.id, {
-                      zoom: Math.min(3, Number((slot.zoom + 0.1).toFixed(2))),
-                    })
-                  }
-                  title={t('放大画面', 'Zoom In')}
-                  style={{
-                    padding: '1px 3px',
-                    cursor: 'pointer',
-                    color: '#e4e4e7',
-                  }}
-                >
-                  <ZoomIn size={10} />
-                </button>
-                {(slot.zoom !== 1 ||
-                  slot.focalPoint.x !== 50 ||
-                  slot.focalPoint.y !== 50) && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateImageSlotById(slot.id, {
-                        zoom: 1,
-                        focalPoint: { x: 50, y: 50 },
-                      })
-                    }
-                    title={t('重置缩放与位置', 'Reset Zoom & Position')}
-                    style={{
-                      padding: '1px 3px',
-                      cursor: 'pointer',
-                      color: '#fbbf24',
-                    }}
-                  >
-                    <RotateCcw size={9} />
-                  </button>
-                )}
-              </div>
-            ) : (
-              <span />
-            )}
-
             <div
-              onClick={() => fileInputRef.current?.click()}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '3px',
-                backgroundColor: 'rgba(37, 99, 235, 0.95)',
+                backgroundColor: 'rgba(15, 23, 42, 0.94)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255, 255, 255, 0.18)',
                 color: '#ffffff',
                 fontSize: '9px',
                 fontWeight: 600,
-                padding: '2px 6px',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.35)',
+                padding: '3px 8px',
+                borderRadius: '9999px',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
               }}
             >
-              <Upload size={9} />
-              <span>
-                {showActualImage
-                  ? t('换图', 'Replace')
-                  : t('上传图片', 'Upload')}
-              </span>
+              {showActualImage && (
+                <>
+                  <span
+                    title={t('按住拖拽图片平移画面 (放大时生效)', 'Drag image to pan when zoomed')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: '#60a5fa',
+                      marginRight: '2px',
+                    }}
+                  >
+                    <Move size={10} />
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateImageSlotById(slot.id, {
+                        zoom: Math.max(0.5, Number((slot.zoom - 0.1).toFixed(2))),
+                      })
+                    }
+                    title={t('缩小画面', 'Zoom Out')}
+                    style={{
+                      padding: '1px 3px',
+                      cursor: 'pointer',
+                      color: '#e4e4e7',
+                      background: 'none',
+                      border: 'none',
+                    }}
+                  >
+                    <ZoomOut size={10} />
+                  </button>
+                  <span
+                    style={{
+                      fontFamily: 'monospace',
+                      minWidth: '28px',
+                      textAlign: 'center',
+                      fontSize: '9px',
+                    }}
+                  >
+                    {Math.round(slot.zoom * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateImageSlotById(slot.id, {
+                        zoom: Math.min(3, Number((slot.zoom + 0.1).toFixed(2))),
+                      })
+                    }
+                    title={t('放大画面', 'Zoom In')}
+                    style={{
+                      padding: '1px 3px',
+                      cursor: 'pointer',
+                      color: '#e4e4e7',
+                      background: 'none',
+                      border: 'none',
+                    }}
+                  >
+                    <ZoomIn size={10} />
+                  </button>
+
+                  {(slot.zoom !== 1 ||
+                    slot.focalPoint.x !== 50 ||
+                    slot.focalPoint.y !== 50) && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateImageSlotById(slot.id, {
+                          zoom: 1,
+                          focalPoint: { x: 50, y: 50 },
+                        })
+                      }
+                      title={t('重置缩放与位置', 'Reset Zoom & Position')}
+                      style={{
+                        padding: '1px 3px',
+                        cursor: 'pointer',
+                        color: '#fbbf24',
+                        background: 'none',
+                        border: 'none',
+                        marginLeft: '2px',
+                      }}
+                    >
+                      <RotateCcw size={9} />
+                    </button>
+                  )}
+
+                  <div
+                    style={{
+                      width: '1px',
+                      height: '10px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                      margin: '0 4px',
+                    }}
+                  />
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title={t('双击图片或点击换图', 'Double click image or click to replace')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff',
+                  fontSize: '9px',
+                  fontWeight: 600,
+                  padding: '2px 7px',
+                  borderRadius: '9999px',
+                  cursor: 'pointer',
+                  border: 'none',
+                }}
+              >
+                <Upload size={9} />
+                <span>
+                  {showActualImage
+                    ? t('换图', 'Replace')
+                    : t('上传图片', 'Upload')}
+                </span>
+              </button>
             </div>
           </div>
         )}

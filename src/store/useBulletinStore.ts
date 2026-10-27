@@ -221,6 +221,13 @@ interface BulletinState {
   ) => void;
 
   updateImageSlotById: (slotId: string, patch: Partial<ImageSlotData>) => void;
+  reorderBlockImages: (sourceSlotId: string, targetSlotId: string) => void;
+  moveBlockImageIndex: (
+    rootBlockId: string,
+    childBlockId: string,
+    fromIndex: number,
+    toIndex: number
+  ) => void;
 
   saveTemplate: (name: string, payload: SectionContainerBlock | ContentBlock) => void;
   deleteTemplate: (id: string) => void;
@@ -1218,6 +1225,130 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
       if (patch.frameOverlayUrl) {
         get().addCustomAsset('Frame PNG', 'frame', patch.frameOverlayUrl);
       }
+    },
+
+    reorderBlockImages: (sourceSlotId, targetSlotId) => {
+      if (sourceSlotId === targetSlotId) return;
+      const doc = get().getActiveDoc();
+      const nextDoc: BulletinDocument = JSON.parse(JSON.stringify(doc));
+      let handled = false;
+
+      const walk = (node: any) => {
+        if (handled || !node || typeof node !== 'object') return;
+
+        // Check if node has images array containing both slots
+        if (Array.isArray(node.images) && node.images.length > 1) {
+          const sourceIdx = node.images.findIndex((s: any) => s && s.id === sourceSlotId);
+          const targetIdx = node.images.findIndex((s: any) => s && s.id === targetSlotId);
+
+          if (sourceIdx !== -1 && targetIdx !== -1) {
+            const nextImgs = [...node.images];
+            const [moved] = nextImgs.splice(sourceIdx, 1);
+            nextImgs.splice(targetIdx, 0, moved);
+            node.images = nextImgs;
+            handled = true;
+            return;
+          }
+        }
+
+        // Check custom column items
+        if (Array.isArray(node.items) && node.items.length > 1) {
+          const sourceIdx = node.items.findIndex(
+            (it: any) => it && it.imageSlot?.id === sourceSlotId
+          );
+          const targetIdx = node.items.findIndex(
+            (it: any) => it && it.imageSlot?.id === targetSlotId
+          );
+
+          if (sourceIdx !== -1 && targetIdx !== -1) {
+            const nextItems = [...node.items];
+            const [moved] = nextItems.splice(sourceIdx, 1);
+            nextItems.splice(targetIdx, 0, moved);
+            node.items = nextItems;
+            handled = true;
+            return;
+          }
+        }
+
+        for (const key of Object.keys(node)) {
+          if (Array.isArray(node[key])) {
+            node[key].forEach(walk);
+          } else if (typeof node[key] === 'object') {
+            walk(node[key]);
+          }
+        }
+      };
+
+      walk(nextDoc.rootBlocks);
+
+      // If not in same block array, swap their photo contents
+      if (!handled) {
+        let sourceSlot: any = null;
+        let targetSlot: any = null;
+
+        const findSlots = (node: any) => {
+          if (!node || typeof node !== 'object') return;
+          if (node.id === sourceSlotId && 'aspectRatio' in node) sourceSlot = node;
+          if (node.id === targetSlotId && 'aspectRatio' in node) targetSlot = node;
+          for (const k of Object.keys(node)) {
+            if (Array.isArray(node[k])) node[k].forEach(findSlots);
+            else if (typeof node[k] === 'object') findSlots(node[k]);
+          }
+        };
+        findSlots(nextDoc.rootBlocks);
+
+        if (sourceSlot && targetSlot) {
+          const tempUrl = sourceSlot.url;
+          const tempFocal = { ...sourceSlot.focalPoint };
+          const tempZoom = sourceSlot.zoom;
+          const tempFrameOverlay = sourceSlot.frameOverlayUrl;
+
+          sourceSlot.url = targetSlot.url;
+          sourceSlot.focalPoint = { ...targetSlot.focalPoint };
+          sourceSlot.zoom = targetSlot.zoom;
+          sourceSlot.frameOverlayUrl = targetSlot.frameOverlayUrl;
+
+          targetSlot.url = tempUrl;
+          targetSlot.focalPoint = tempFocal;
+          targetSlot.zoom = tempZoom;
+          targetSlot.frameOverlayUrl = tempFrameOverlay;
+          handled = true;
+        }
+      }
+
+      if (handled) {
+        nextDoc.updatedAt = new Date().toISOString();
+        commitDocUpdate(nextDoc);
+      }
+    },
+
+    moveBlockImageIndex: (rootBlockId, childBlockId, fromIndex, toIndex) => {
+      const doc = get().getActiveDoc();
+      const nextDoc: BulletinDocument = JSON.parse(JSON.stringify(doc));
+
+      const section = nextDoc.rootBlocks.find((r) => r.id === rootBlockId);
+      if (!section) return;
+
+      const block = (section as SectionContainerBlock).children?.find((c) => c.id === childBlockId);
+      if (!block || !('images' in block) || !Array.isArray((block as any).images)) return;
+
+      const imgs = [...(block as any).images];
+      if (
+        fromIndex < 0 ||
+        fromIndex >= imgs.length ||
+        toIndex < 0 ||
+        toIndex >= imgs.length ||
+        fromIndex === toIndex
+      ) {
+        return;
+      }
+
+      const [moved] = imgs.splice(fromIndex, 1);
+      imgs.splice(toIndex, 0, moved);
+      (block as any).images = imgs;
+
+      nextDoc.updatedAt = new Date().toISOString();
+      commitDocUpdate(nextDoc);
     },
 
     saveTemplate: (name, payload) => {

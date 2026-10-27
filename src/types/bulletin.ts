@@ -204,6 +204,15 @@ export type PhotoLayoutPreset =
   | '2_plus_3'
   | '4_plus_1'
   | '1_plus_4'
+  | '3x2'
+  | '2x3'
+  | '4_plus_2'
+  | '2_plus_4'
+  | '4_plus_3'
+  | '3_plus_4'
+  | '4x2'
+  | '3_plus_3_plus_2'
+  | '3x3'
   | 'stacked';
 
 export interface DatedEventBlock {
