@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  }
+}
+
+/* Custom subtle scrollbars for the 3-pane workspace */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(161, 161, 170, 0.25);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(161, 161, 170, 0.45);
+}
+
+/* Contenteditable placeholder support */
+[contenteditable="true"]:empty:before {
+  content: attr(data-placeholder);
+  color: #a1a1aa;
+  pointer-events: none;
+}
+
+[contenteditable="true"]:focus {
+  outline: 1px dashed rgba(113, 113, 122, 0.6);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Animations for adding containers & changing columns */
+@keyframes containerEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes columnFadeChange {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-container-enter {
+  animation: containerEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-column-change {
+  animation: columnFadeChange 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Vector PDF Printing Styles */
+@media print {
+  @page {
+    size: auto;
+    margin: 0;
+  }
+  body {
+    background-color: #ffffff !important;
+    color: #18181b !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  header,
+  aside,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+}
+
+/* ========================================================= */
+/* MOBILE RESPONSIVE MEDIA QUERIES (@media)                  */
+/* ========================================================= */
+@media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden !important;
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent automatic form field zooming on mobile Safari/Chrome */
+  input[type="text"],
+  input[type="number"],
+  select,
+  textarea {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Ensure popovers and floating dropdowns never overflow mobile viewport */
+  .mobile-safe-dropdown {
+    max-width: calc(100vw - 20px) !important;
+  }
+}
+
+
