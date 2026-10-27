@@ -701,168 +701,179 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
           </div>
         )}
 
-        {/* On-Canvas Floating Mini Controls when Selected - CENTERED IN THE MIDDLE */}
-        {isSelected && (
+      </div>
+
+      {/* On-Canvas Floating Mini Controls when Selected - OUTSIDE the overflow-hidden masking div! */}
+      {!previewMode && isSelected && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            bottom: '8px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 35,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'auto',
+            whiteSpace: 'nowrap',
+          }}
+        >
           <div
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
             style={{
-              position: 'absolute',
-              bottom: '8px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 25,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              pointerEvents: 'auto',
-              maxWidth: 'calc(100% - 16px)',
-              whiteSpace: 'nowrap',
+              gap: '3px',
+              backgroundColor: 'rgba(15, 23, 42, 0.94)',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255, 255, 255, 0.22)',
+              color: '#ffffff',
+              fontSize: '10px',
+              fontWeight: 600,
+              padding: '3px 7px',
+              borderRadius: '9999px',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.2)',
+              flexShrink: 0,
             }}
+            className="animate-pop-in select-none"
           >
-            <div
+            {showActualImage && (
+              <>
+                <span
+                  title={t('按住拖拽图片平移画面 (放大时生效)', 'Drag image to pan when zoomed')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    color: '#60a5fa',
+                    marginRight: '2px',
+                  }}
+                >
+                  <Move size={11} />
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateImageSlotById(slot.id, {
+                      zoom: Math.max(0.5, Number((slot.zoom - 0.1).toFixed(2))),
+                    })
+                  }
+                  title={t('缩小画面', 'Zoom Out')}
+                  style={{
+                    padding: '2px 4px',
+                    cursor: 'pointer',
+                    color: '#e4e4e7',
+                    background: 'none',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                  className="hover:text-white active:scale-95 transition-transform"
+                >
+                  <ZoomOut size={11} />
+                </button>
+                <span
+                  style={{
+                    fontFamily: 'monospace',
+                    minWidth: '28px',
+                    textAlign: 'center',
+                    fontSize: '10px',
+                  }}
+                >
+                  {Math.round(slot.zoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateImageSlotById(slot.id, {
+                      zoom: Math.min(3, Number((slot.zoom + 0.1).toFixed(2))),
+                    })
+                  }
+                  title={t('放大画面', 'Zoom In')}
+                  style={{
+                    padding: '2px 4px',
+                    cursor: 'pointer',
+                    color: '#e4e4e7',
+                    background: 'none',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                  className="hover:text-white active:scale-95 transition-transform"
+                >
+                  <ZoomIn size={11} />
+                </button>
+
+                {(slot.zoom !== 1 ||
+                  slot.focalPoint.x !== 50 ||
+                  slot.focalPoint.y !== 50) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateImageSlotById(slot.id, {
+                        zoom: 1,
+                        focalPoint: { x: 50, y: 50 },
+                      })
+                    }
+                    title={t('重置缩放与位置', 'Reset Zoom & Position')}
+                    style={{
+                      padding: '2px 3px',
+                      cursor: 'pointer',
+                      color: '#fbbf24',
+                      background: 'none',
+                      border: 'none',
+                      marginLeft: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    className="hover:text-amber-200 active:scale-95 transition-transform"
+                  >
+                    <RotateCcw size={10} />
+                  </button>
+                )}
+
+                <div
+                  style={{
+                    width: '1px',
+                    height: '11px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                    margin: '0 3px',
+                  }}
+                />
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              title={t('双击图片或点击换图', 'Double click image or click to replace')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '3px',
-                backgroundColor: 'rgba(15, 23, 42, 0.94)',
-                backdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255, 255, 255, 0.18)',
+                backgroundColor: '#2563eb',
                 color: '#ffffff',
-                fontSize: '9px',
+                fontSize: '10px',
                 fontWeight: 600,
-                padding: '3px 8px',
+                padding: '2px 8px',
                 borderRadius: '9999px',
-                boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+                cursor: 'pointer',
+                border: 'none',
+                flexShrink: 0,
               }}
-              className="animate-pop-in select-none"
+              className="hover:bg-blue-500 active:scale-95 transition-all shadow-xs"
             >
-              {showActualImage && (
-                <>
-                  <span
-                    title={t('按住拖拽图片平移画面 (放大时生效)', 'Drag image to pan when zoomed')}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      color: '#60a5fa',
-                      marginRight: '2px',
-                    }}
-                  >
-                    <Move size={10} />
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateImageSlotById(slot.id, {
-                        zoom: Math.max(0.5, Number((slot.zoom - 0.1).toFixed(2))),
-                      })
-                    }
-                    title={t('缩小画面', 'Zoom Out')}
-                    style={{
-                      padding: '1px 3px',
-                      cursor: 'pointer',
-                      color: '#e4e4e7',
-                      background: 'none',
-                      border: 'none',
-                    }}
-                  >
-                    <ZoomOut size={10} />
-                  </button>
-                  <span
-                    style={{
-                      fontFamily: 'monospace',
-                      minWidth: '28px',
-                      textAlign: 'center',
-                      fontSize: '9px',
-                    }}
-                  >
-                    {Math.round(slot.zoom * 100)}%
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateImageSlotById(slot.id, {
-                        zoom: Math.min(3, Number((slot.zoom + 0.1).toFixed(2))),
-                      })
-                    }
-                    title={t('放大画面', 'Zoom In')}
-                    style={{
-                      padding: '1px 3px',
-                      cursor: 'pointer',
-                      color: '#e4e4e7',
-                      background: 'none',
-                      border: 'none',
-                    }}
-                  >
-                    <ZoomIn size={10} />
-                  </button>
-
-                  {(slot.zoom !== 1 ||
-                    slot.focalPoint.x !== 50 ||
-                    slot.focalPoint.y !== 50) && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateImageSlotById(slot.id, {
-                          zoom: 1,
-                          focalPoint: { x: 50, y: 50 },
-                        })
-                      }
-                      title={t('重置缩放与位置', 'Reset Zoom & Position')}
-                      style={{
-                        padding: '1px 3px',
-                        cursor: 'pointer',
-                        color: '#fbbf24',
-                        background: 'none',
-                        border: 'none',
-                        marginLeft: '2px',
-                      }}
-                    >
-                      <RotateCcw size={9} />
-                    </button>
-                  )}
-
-                  <div
-                    style={{
-                      width: '1px',
-                      height: '10px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                      margin: '0 4px',
-                    }}
-                  />
-                </>
-              )}
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                title={t('双击图片或点击换图', 'Double click image or click to replace')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                  backgroundColor: '#2563eb',
-                  color: '#ffffff',
-                  fontSize: '9px',
-                  fontWeight: 600,
-                  padding: '2px 7px',
-                  borderRadius: '9999px',
-                  cursor: 'pointer',
-                  border: 'none',
-                }}
-              >
-                <Upload size={9} />
-                <span>
-                  {showActualImage
-                    ? t('换图', 'Replace')
-                    : t('上传图片', 'Upload')}
-                </span>
-              </button>
-            </div>
+              <Upload size={10} />
+              <span>
+                {showActualImage
+                  ? t('换图', 'Replace')
+                  : t('上传图片', 'Upload')}
+              </span>
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Interactive Frame Resize Handle (bottom-right corner) */}
       {!previewMode && isSelected && (
