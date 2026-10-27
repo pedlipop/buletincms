@@ -1860,6 +1860,9 @@ interface CanvasRendererProps {
 }
 
 export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => {
+  const lang = useBulletinStore((s) => s.lang);
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const doc = useBulletinStore((s) => s.getActiveDoc());
   const [dragOverRootIdx, setDragOverRootIdx] = useState<number | null>(null);
   const [dragOverContainerEndId, setDragOverContainerEndId] = useState<string | null>(
     null
@@ -1870,6 +1873,9 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
   useEffect(() => {
     const el = internalRef.current;
     if (!el) return;
+    if (el.offsetHeight > 0) {
+      setContentHeight(el.offsetHeight);
+    }
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setContentHeight(Math.round(entry.contentRect.height));
@@ -1877,11 +1883,7 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
-
-  const lang = useBulletinStore((s) => s.lang);
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
-  const doc = useBulletinStore((s) => s.getActiveDoc());
+  }, [doc.rootBlocks]);
   const selectedRootBlockId = useBulletinStore((s) => s.selectedRootBlockId);
   const selectedChildBlockId = useBulletinStore((s) => s.selectedChildBlockId);
   const previewMode = useBulletinStore((s) => s.previewMode);

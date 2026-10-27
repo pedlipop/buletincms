@@ -282,39 +282,39 @@ export const App: React.FC = () => {
         }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [currentView, undo, redo, setZoomPercent]);
 
-  // Canvas-specific wheel zoom listener: intercepts Ctrl+Wheel, Alt+Wheel,
-  // and trackpad pinch gestures over the canvas, zooming the canvas scale
-  // instead of the browser webpage/window size!
+  // Canvas-specific wheel zoom listener: intercepts Ctrl+Wheel, Meta+Wheel, Alt+Wheel,
+  // and trackpad pinch gestures, zooming the canvas scale instead of the browser webpage/window size!
   useEffect(() => {
-    const el = mainCanvasRef.current;
-    if (!el) return;
+    if (currentView !== 'editor') return;
 
     const onWheel = (e: WheelEvent) => {
+      // Check if user is zooming with Ctrl/Cmd or Alt key (or trackpad pinch gesture which sets ctrlKey=true)
       if (e.ctrlKey || e.metaKey || e.altKey) {
+        // ALWAYS prevent default browser page zoom!
         e.preventDefault();
         e.stopPropagation();
 
         const currentZoom = useBulletinStore.getState().zoomPercent;
         const delta = -e.deltaY;
         let newZoom: number;
-        if (Math.abs(delta) > 40) {
-          // Discrete mouse wheel notch
+        if (Math.abs(delta) > 30) {
+          // Discrete mouse wheel notch (standard mouse)
           newZoom = delta > 0 ? currentZoom + 10 : currentZoom - 10;
         } else {
           // Precision trackpad pinch
-          newZoom = Math.round(currentZoom + delta * 0.25);
+          newZoom = Math.round(currentZoom + delta * 0.35);
         }
         setZoomPercent(newZoom);
       }
     };
 
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [setZoomPercent]);
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel);
+  }, [currentView, setZoomPercent]);
 
   // Render Home Screen / Bulletin Library first before entering the Editor
   if (currentView === 'home') {
@@ -801,7 +801,7 @@ export const App: React.FC = () => {
                   : undefined
               }
               className={`fixed ${
-                zoomBarPos ? '' : 'md:absolute bottom-16 md:bottom-5 left-4 md:left-auto md:right-5'
+                zoomBarPos ? '' : 'bottom-5 right-4 md:right-[340px]'
               } z-30 flex items-center gap-0.5 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-lg p-1 shadow-2xl text-xs select-none`}
               onClick={(e) => e.stopPropagation()}
             >
