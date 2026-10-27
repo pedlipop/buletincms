@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -1897,6 +1897,20 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
   const [dragOverContainerEndId, setDragOverContainerEndId] = useState<string | null>(
     null
   );
+  const [contentHeight, setContentHeight] = useState<number>(0);
+  const internalRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = internalRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContentHeight(Math.round(entry.contentRect.height));
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const lang = useBulletinStore((s) => s.lang);
   const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
@@ -3031,18 +3045,44 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
     }
   };
 
+  const scale = zoomPercent / 100;
+  const scaledWidth = Math.round(doc.canvasWidth * scale);
+  const scaledHeight = contentHeight > 0 ? Math.round(contentHeight * scale) : undefined;
+
   return (
     <div
       style={{
-        transform: `scale(${zoomPercent / 100})`,
-        transformOrigin: 'top center',
-        transition: 'transform 0.15s ease',
+        width: `${scaledWidth}px`,
+        height: scaledHeight ? `${scaledHeight}px` : undefined,
+        margin: '0 auto',
+        position: 'relative',
+        display: 'flex',
+        justifyContent: 'center',
+        flexShrink: 0,
+        transition: 'width 0.12s ease, height 0.12s ease',
       }}
     >
       <div
-        ref={exportRef}
         style={{
+          transform: `scale(${scale})`,
+          transformOrigin: 'top center',
+          transition: 'transform 0.12s ease',
           width: `${doc.canvasWidth}px`,
+          position: 'absolute',
+          top: 0,
+          left: '50%',
+          marginLeft: `-${doc.canvasWidth / 2}px`,
+        }}
+      >
+        <div
+          ref={(node) => {
+            internalRef.current = node;
+            if (exportRef) {
+              (exportRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+            }
+          }}
+          style={{
+            width: `${doc.canvasWidth}px`,
           minHeight: doc.rootBlocks.length === 0 ? '560px' : undefined,
           backgroundColor: '#ffffff',
           color: '#18181b',
@@ -3252,5 +3292,6 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
         )}
       </div>
     </div>
+  </div>
   );
 };

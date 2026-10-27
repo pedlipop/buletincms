@@ -576,7 +576,7 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
         selectedImageSlotId: preview ? null : get().selectedImageSlotId,
       }),
 
-    setZoomPercent: (zoom) => set({ zoomPercent: Math.min(150, Math.max(60, zoom)) }),
+    setZoomPercent: (zoom) => set({ zoomPercent: Math.min(250, Math.max(25, Math.round(zoom))) }),
 
     updateDocumentMeta: (patch) => {
       const doc = get().getActiveDoc();

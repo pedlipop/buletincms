@@ -18,6 +18,8 @@ import {
   Share2,
   Sliders,
   Undo2,
+  Maximize2,
+  RotateCcw,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
@@ -178,12 +180,38 @@ export const App: React.FC = () => {
   const toggleDocumentStatus = useBulletinStore((s) => s.toggleDocumentStatus);
   const syncRemoteDatabase = useBulletinStore((s) => s.syncRemoteDatabase);
 
+  const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false);
+  const mainCanvasRef = useRef<HTMLElement | null>(null);
+  const zoomMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close zoom presets menu on outside click
+  useEffect(() => {
+    if (!isZoomMenuOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (zoomMenuRef.current && !zoomMenuRef.current.contains(e.target as Node)) {
+        setIsZoomMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [isZoomMenuOpen]);
+
+  // Automatically calculate zoom percentage to fit bulletin width to available viewport
+  const handleFitToScreen = () => {
+    if (!mainCanvasRef.current) return;
+    const padding = window.innerWidth < 640 ? 16 : 64;
+    const availableWidth = mainCanvasRef.current.clientWidth - padding;
+    const docWidth = doc.canvasWidth || 480;
+    const fitZoom = Math.min(200, Math.max(30, Math.floor((availableWidth / docWidth) * 100)));
+    setZoomPercent(fitZoom);
+  };
+
   // Initial sync with Railway PostgreSQL / backend database on startup
   useEffect(() => {
     syncRemoteDatabase();
   }, [syncRemoteDatabase]);
 
-  // Global keyboard shortcuts for Undo / Redo in Editor
+  // Global keyboard shortcuts for Undo / Redo & Canvas Zoom
   useEffect(() => {
     if (currentView !== 'editor') return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -208,11 +236,56 @@ export const App: React.FC = () => {
           e.preventDefault();
           redo();
         }
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+        if (!isEditingText) {
+          e.preventDefault();
+          setZoomPercent(useBulletinStore.getState().zoomPercent + 10);
+        }
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
+        if (!isEditingText) {
+          e.preventDefault();
+          setZoomPercent(useBulletinStore.getState().zoomPercent - 10);
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        if (!isEditingText) {
+          e.preventDefault();
+          setZoomPercent(100);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentView, undo, redo]);
+  }, [currentView, undo, redo, setZoomPercent]);
+
+  // Canvas-specific wheel zoom listener: intercepts Ctrl+Wheel, Alt+Wheel,
+  // and trackpad pinch gestures over the canvas, zooming the canvas scale
+  // instead of the browser webpage/window size!
+  useEffect(() => {
+    const el = mainCanvasRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const currentZoom = useBulletinStore.getState().zoomPercent;
+        const delta = -e.deltaY;
+        let newZoom: number;
+        if (Math.abs(delta) > 40) {
+          // Discrete mouse wheel notch
+          newZoom = delta > 0 ? currentZoom + 10 : currentZoom - 10;
+        } else {
+          // Precision trackpad pinch
+          newZoom = Math.round(currentZoom + delta * 0.25);
+        }
+        setZoomPercent(newZoom);
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [setZoomPercent]);
 
   // Render Home Screen / Bulletin Library first before entering the Editor
   if (currentView === 'home') {
@@ -470,6 +543,14 @@ export const App: React.FC = () => {
             >
               <ZoomIn size={13} />
             </button>
+            <button
+              type="button"
+              onClick={handleFitToScreen}
+              className="px-2 py-1.5 text-zinc-300 hover:bg-zinc-700 border-l border-zinc-700"
+              title={t('自适应屏幕宽度', 'Fit to Screen Width')}
+            >
+              <Maximize2 size={12} />
+            </button>
           </div>
         </div>
 
@@ -658,6 +739,7 @@ export const App: React.FC = () => {
 
         {/* Center Canvas: on desktop flex-1, on mobile shown when mobileTab === 'canvas' */}
         <main
+          ref={mainCanvasRef}
           onClick={() => selectBlock(null, null)}
           className={`${
             mobileTab === 'canvas' ? 'flex' : 'hidden'
@@ -668,8 +750,117 @@ export const App: React.FC = () => {
             backgroundSize: '20px 20px',
           }}
         >
-          <div className="h-fit pb-20 md:pb-16 flex justify-center">
+          <div className="h-fit pb-24 md:pb-20 flex justify-center">
             <CanvasRenderer exportRef={exportCanvasRef} />
+          </div>
+
+          {/* Floating On-Canvas Zoom & Viewport Bar */}
+          <div
+            ref={zoomMenuRef}
+            className="fixed md:absolute bottom-16 md:bottom-5 left-4 md:left-auto md:right-5 z-30 flex items-center gap-0.5 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-lg p-1 shadow-2xl text-xs select-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Fit to Screen */}
+            <button
+              type="button"
+              onClick={handleFitToScreen}
+              className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+              title={t('自适应画布宽度 (Fit Width)', 'Fit Canvas Width to Screen')}
+            >
+              <Maximize2 size={13} />
+            </button>
+
+            <div className="w-px h-4 bg-zinc-700 my-auto mx-0.5" />
+
+            {/* Zoom Out */}
+            <button
+              type="button"
+              onClick={() => setZoomPercent(zoomPercent - 10)}
+              disabled={zoomPercent <= 25}
+              className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 disabled:opacity-30 rounded transition-colors"
+              title={t('缩小画布 (Ctrl -)', 'Zoom Out Canvas (Ctrl -)')}
+            >
+              <ZoomOut size={13} />
+            </button>
+
+            {/* Zoom Percentage / Presets Menu */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsZoomMenuOpen(!isZoomMenuOpen)}
+                className="px-2 py-1 font-mono text-[11px] font-bold text-zinc-200 hover:bg-zinc-800 rounded flex items-center gap-1 transition-colors"
+                title={t('点击选择缩放比例', 'Select Zoom Level')}
+              >
+                <span>{zoomPercent}%</span>
+                <ChevronDown size={10} className="text-zinc-400" />
+              </button>
+
+              {isZoomMenuOpen && (
+                <div
+                  className="absolute bottom-full left-0 md:left-auto md:right-0 mb-2 w-36 bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-lg shadow-2xl py-1 text-xs z-50 animate-in fade-in zoom-in-95 duration-100"
+                  onClick={() => setIsZoomMenuOpen(false)}
+                >
+                  <div className="px-2.5 py-1 text-[9px] font-bold text-zinc-500 uppercase tracking-wider">
+                    {t('画布缩放视图', 'Canvas Zoom')}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleFitToScreen}
+                    className="w-full text-left px-2.5 py-1.5 hover:bg-zinc-800 flex items-center justify-between text-blue-400 font-semibold"
+                  >
+                    <span>{t('自适应屏幕', 'Fit Screen')}</span>
+                    <Maximize2 size={11} />
+                  </button>
+                  <div className="h-px bg-zinc-800 my-1" />
+                  {[50, 75, 100, 125, 150, 200].map((z) => (
+                    <button
+                      key={z}
+                      type="button"
+                      onClick={() => setZoomPercent(z)}
+                      className={`w-full text-left px-2.5 py-1 hover:bg-zinc-800 flex items-center justify-between font-mono text-[11px] ${
+                        zoomPercent === z
+                          ? 'text-white font-bold bg-blue-600/30'
+                          : 'text-zinc-300'
+                      }`}
+                    >
+                      <span>{z}%</span>
+                      {z === 100 && (
+                        <span className="text-[9px] text-zinc-400 font-sans">
+                          {t('实际', '1:1')}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                  <div className="h-px bg-zinc-800 my-1" />
+                  <div className="px-2.5 py-1 text-[9px] text-zinc-500 leading-tight">
+                    {t('按住 Ctrl + 滚轮也可缩放画布', 'Ctrl + Wheel to zoom canvas')}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Zoom In */}
+            <button
+              type="button"
+              onClick={() => setZoomPercent(zoomPercent + 10)}
+              disabled={zoomPercent >= 250}
+              className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 disabled:opacity-30 rounded transition-colors"
+              title={t('放大画布 (Ctrl +)', 'Zoom In Canvas (Ctrl +)')}
+            >
+              <ZoomIn size={13} />
+            </button>
+
+            {/* Reset to 100% */}
+            {zoomPercent !== 100 && (
+              <button
+                type="button"
+                onClick={() => setZoomPercent(100)}
+                className="p-1.5 text-amber-300 hover:text-amber-200 hover:bg-zinc-800 rounded transition-colors"
+                title={t('重置为 100% 实际大小', 'Reset to 100%')}
+              >
+                <RotateCcw size={12} />
+              </button>
+            )}
           </div>
 
           {/* Floating Pill on mobile when a block is selected to jump to inspector */}
