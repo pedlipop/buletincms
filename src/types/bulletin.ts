@@ -140,7 +140,12 @@ export interface IntroQuoteBoxBlock {
   type: 'intro_quote_box';
   text: string;
   borderStyle: 'dashed' | 'solid' | 'none';
-  textAlign: 'left' | 'center' | 'justify';
+  textAlign: 'left' | 'center' | 'right' | 'justify';
+  textIndent?: string; // e.g. '0px' | '1em' | '2em' | '3em' | '4em'
+  lineHeight?: number;
+  letterSpacing?: string;
+  paddingX?: number;
+  paddingY?: number;
 }
 
 export interface SimpleTextBlock {
@@ -151,7 +156,11 @@ export interface SimpleTextBlock {
   heading: string;
   showBody: boolean;
   bodyText: string;
-  textAlign: 'left' | 'center' | 'justify';
+  textAlign: 'left' | 'center' | 'right' | 'justify';
+  textIndent?: string;
+  lineHeight?: number;
+  letterSpacing?: string;
+  bodyPaddingLeft?: number;
 }
 
 export interface FreeformAssetBlock {

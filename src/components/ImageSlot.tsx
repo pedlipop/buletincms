@@ -279,19 +279,16 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
   const handleSlotClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (previewMode) return;
-    const now = Date.now();
-    if (now - lastClickTimeRef.current < 350) {
-      // Rapid double click opens upload window directly!
-      fileInputRef.current?.click();
-      lastClickTimeRef.current = 0;
-      return;
-    }
-    lastClickTimeRef.current = now;
     selectImageSlot(slot.id, rootBlockId, childBlockId);
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    // Do NOT trigger file upload if user was currently typing/editing text in an active contentEditable element!
+    const active = document.activeElement;
+    if (active && (active as HTMLElement).isContentEditable) {
+      return;
+    }
     if (previewMode) return;
     fileInputRef.current?.click();
   };

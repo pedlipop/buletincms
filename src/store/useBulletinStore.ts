@@ -486,41 +486,65 @@ export const sanitizeDocForProduction = (doc: BulletinDocument): BulletinDocumen
   return doc;
 };
 
+const DELETED_DOCS_KEY = 'cngr_buletin_deleted_ids';
+
+const getDeletedDocIds = (): Set<string> => {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(DELETED_DOCS_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
+const markDocAsDeleted = (docId: string) => {
+  if (typeof window === 'undefined' || !docId) return;
+  try {
+    const ids = getDeletedDocIds();
+    ids.add(docId);
+    localStorage.setItem(DELETED_DOCS_KEY, JSON.stringify(Array.from(ids)));
+  } catch {}
+};
+
 const loadInitialState = () => {
+  if (typeof window === 'undefined') {
+    return {
+      documents: [] as BulletinDocument[],
+      activeDocId: '',
+      savedTemplates: [] as SavedTemplate[],
+      customAssets: [] as CustomAssetItem[],
+    };
+  }
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed.documents) && parsed.documents.length > 0) {
-        const docs = (parsed.documents as BulletinDocument[]).map(sanitizeDocForProduction);
-        // Keep existing documents, or empty list if user deliberately deleted all
-        let cleanDocs = docs.filter((d) => d && Array.isArray(d.rootBlocks));
-        const hadExplicitEmptyDocs = Array.isArray(parsed.documents) && parsed.documents.length === 0;
-        if (!hadExplicitEmptyDocs) {
-          if (cleanDocs.length === 1 && cleanDocs[0].rootBlocks.length === 0) {
-            cleanDocs = [createDefaultGreyBulletin()];
-          } else if (cleanDocs.length === 0) {
-            cleanDocs = [createDefaultGreyBulletin()];
-          }
-        }
+      if (Array.isArray(parsed.documents)) {
+        const deletedIds = getDeletedDocIds();
+        const docs = (parsed.documents as BulletinDocument[])
+          .map(sanitizeDocForProduction)
+          .filter((d) => d && Array.isArray(d.rootBlocks) && !deletedIds.has(d.id));
 
         return {
-          documents: cleanDocs,
-          activeDocId: cleanDocs.some((d) => d.id === parsed.activeDocId) ? parsed.activeDocId : (cleanDocs[0]?.id || ''),
+          documents: docs,
+          activeDocId: docs.some((d) => d.id === parsed.activeDocId)
+            ? parsed.activeDocId
+            : (docs[0]?.id || ''),
           savedTemplates: (parsed.savedTemplates || []) as SavedTemplate[],
-          customAssets: loadCustomAssets(cleanDocs),
+          customAssets: loadCustomAssets(docs),
         };
       }
     }
   } catch (e) {
     console.warn('Failed to load state from localStorage:', e);
   }
-  const initialDoc = createDefaultGreyBulletin();
   return {
-    documents: [initialDoc],
-    activeDocId: initialDoc.id,
+    documents: [] as BulletinDocument[],
+    activeDocId: '',
     savedTemplates: [] as SavedTemplate[],
-    customAssets: loadCustomAssets([initialDoc]),
+    customAssets: [] as CustomAssetItem[],
   };
 };
 
@@ -1647,8 +1671,17 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
           rootBlocks: [],
         };
       } else {
-        newDoc = createDefaultGreyBulletin();
-        newDoc.status = 'draft';
+        newDoc = {
+          id: uid('doc'),
+          title: '未命名自由排版简报',
+          issueNumber: new Date().toISOString().slice(0, 7),
+          status: 'draft',
+          canvasWidth: 480,
+          wireframeMode: false,
+          showGridGuides: false,
+          updatedAt: new Date().toISOString(),
+          rootBlocks: [],
+        };
       }
 
       const nextDocs = [newDoc, ...state.documents];
@@ -1737,6 +1770,7 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
     },
 
     deleteDocument: (docId) => {
+      markDocAsDeleted(docId);
       const state = get();
       const nextDocs = state.documents.filter((d) => d.id !== docId);
       const nextActiveId =
@@ -1763,6 +1797,7 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
 
     deleteAllDocuments: () => {
       const state = get();
+      state.documents.forEach((d) => markDocAsDeleted(d.id));
       persistState([], '', state.savedTemplates);
       if (typeof window !== 'undefined') {
         fetch('/api/bulletins', { method: 'DELETE' }).catch(() => {});
@@ -1812,13 +1847,15 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
         }
 
         // Fetch documents from remote database
+        const deletedIds = getDeletedDocIds();
         const remoteDocs: BulletinDocument[] = [];
         for (const item of remoteList) {
+          if (deletedIds.has(item.id)) continue;
           try {
             const docRes = await fetch(`/api/bulletins/${item.id}`);
             if (docRes.ok) {
               const fullDoc = await docRes.json();
-              if (fullDoc && fullDoc.id && Array.isArray(fullDoc.rootBlocks)) {
+              if (fullDoc && fullDoc.id && Array.isArray(fullDoc.rootBlocks) && !deletedIds.has(fullDoc.id)) {
                 remoteDocs.push(sanitizeDocForProduction(fullDoc));
               }
             }
@@ -1837,7 +1874,7 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
               map.set(rd.id, rd);
             }
           });
-          const merged = Array.from(map.values());
+          const merged = Array.from(map.values()).filter((d) => !deletedIds.has(d.id));
           merged.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
           set({ documents: merged });
           persistState(merged, get().activeDocId, get().savedTemplates);

@@ -445,8 +445,8 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
                     justifyContent:
                       b.textAlign === 'center'
                         ? 'center'
-                        : b.textAlign === 'justify'
-                        ? 'flex-start'
+                        : b.textAlign === 'right'
+                        ? 'flex-end'
                         : 'flex-start',
                   }}
                 >
@@ -475,7 +475,10 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
                   onChange={(bodyText) => updateSelf({ bodyText })}
                   style={{
                     fontSize: '11.5px',
-                    lineHeight: 1.6,
+                    lineHeight: b.lineHeight || 1.6,
+                    letterSpacing: b.letterSpacing || '0px',
+                    textIndent: b.textIndent || '0px',
+                    paddingLeft: b.bodyPaddingLeft ? `${b.bodyPaddingLeft}px` : undefined,
                     color: theme.mutedTextColor,
                     textAlign: b.textAlign,
                   }}
@@ -667,6 +670,8 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
 
       case 'intro_quote_box': {
         const b = block as IntroQuoteBoxBlock;
+        const py = b.paddingY ?? 12;
+        const px = b.paddingX ?? 14;
         return (
           <div
             style={{
@@ -676,7 +681,7 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
                   ? 'none'
                   : `1.5px ${b.borderStyle} ${theme.primaryColor}`,
               borderRadius: '6px',
-              padding: '12px 14px',
+              padding: `${py}px ${px}px`,
             }}
           >
             <EditableText
@@ -684,7 +689,9 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
               onChange={(text) => updateSelf({ text })}
               style={{
                 fontSize: '12px',
-                lineHeight: 1.65,
+                lineHeight: b.lineHeight || 1.65,
+                letterSpacing: b.letterSpacing || '0px',
+                textIndent: b.textIndent || '0px',
                 color: theme.textColor,
                 textAlign: b.textAlign,
                 fontWeight: 500,
@@ -1750,6 +1757,7 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
 
   return (
     <div
+      data-block-id={block.id}
       onClick={(e) => {
         e.stopPropagation();
         if (!previewMode) {

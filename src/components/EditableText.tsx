@@ -8,6 +8,7 @@ import {
   Bold,
   Eraser,
   Highlighter,
+  Indent,
   Italic,
   MoveVertical,
   Palette,
@@ -62,6 +63,31 @@ const FONT_SIZE_OPTIONS = [
 
 const LINE_HEIGHT_OPTIONS = ['1.15', '1.35', '1.5', '1.65', '1.85', '2.1'];
 
+const TEXT_INDENT_OPTIONS = [
+  { val: '0px', zh: '无 (0)', en: 'None' },
+  { val: '1em', zh: '1字', en: '1em' },
+  { val: '2em', zh: '2字', en: '2em' },
+  { val: '3em', zh: '3字', en: '3em' },
+  { val: '4em', zh: '4字', en: '4em' },
+];
+
+const BLOCK_PADDING_LEFT_OPTIONS = [
+  { val: '0px', zh: '0px', en: '0px' },
+  { val: '8px', zh: '8px', en: '8px' },
+  { val: '14px', zh: '14px(对齐符号)', en: '14px(Icon)' },
+  { val: '20px', zh: '20px', en: '20px' },
+  { val: '28px', zh: '28px', en: '28px' },
+];
+
+const LETTER_SPACING_OPTIONS = [
+  { val: '0px', zh: '标准', en: '0' },
+  { val: '0.5px', zh: '0.5px', en: '0.5px' },
+  { val: '1px', zh: '1px', en: '1px' },
+  { val: '1.5px', zh: '1.5px', en: '1.5px' },
+  { val: '2px', zh: '2px', en: '2px' },
+  { val: '3px', zh: '3px', en: '3px' },
+];
+
 export const EditableText: React.FC<EditableTextProps> = ({
   value,
   onChange,
@@ -85,8 +111,12 @@ export const EditableText: React.FC<EditableTextProps> = ({
     placeBelow: boolean;
   } | null>(null);
   const [currentFontSize, setCurrentFontSize] = useState<number>(12);
+  const [currentTextIndent, setCurrentTextIndent] = useState<string>('0px');
+  const [currentPaddingLeft, setCurrentPaddingLeft] = useState<string>('0px');
+  const [currentLineHeight, setCurrentLineHeight] = useState<string>('1.6');
+  const [currentLetterSpacing, setCurrentLetterSpacing] = useState<string>('0px');
   const [activePopover, setActivePopover] = useState<
-    'color' | 'highlight' | 'lineHeight' | null
+    'color' | 'highlight' | 'lineHeight' | 'indent' | null
   >(null);
 
   // Sync external value into DOM without clobbering active typing
@@ -104,7 +134,7 @@ export const EditableText: React.FC<EditableTextProps> = ({
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const toolbarWidth = Math.min(430, window.innerWidth - 24);
+    const toolbarWidth = Math.min(480, window.innerWidth - 24);
     const halfWidth = toolbarWidth / 2;
     const centerX = rect.left + rect.width / 2;
     const clampedLeft = Math.max(
@@ -137,7 +167,17 @@ export const EditableText: React.FC<EditableTextProps> = ({
         setCurrentFontSize(parsed);
       }
     }
-  }, []);
+
+    // Detect block wrapper styles
+    const wrapper = el.querySelector(
+      ':scope > div[data-fmt-block="1"]'
+    ) as HTMLDivElement | null;
+    const blockTarget = wrapper || el;
+    setCurrentTextIndent(blockTarget.style.textIndent || (style?.textIndent as string) || '0px');
+    setCurrentPaddingLeft(blockTarget.style.paddingLeft || (style?.paddingLeft as string) || '0px');
+    setCurrentLineHeight(blockTarget.style.lineHeight || String(style?.lineHeight || '1.6'));
+    setCurrentLetterSpacing(blockTarget.style.letterSpacing || (style?.letterSpacing as string) || '0px');
+  }, [style?.letterSpacing, style?.lineHeight, style?.paddingLeft, style?.textIndent]);
 
   const saveSelection = useCallback(() => {
     const el = ref.current;
@@ -273,9 +313,9 @@ export const EditableText: React.FC<EditableTextProps> = ({
     commitDomChange();
   };
 
-  // Apply block-level style (text-align or line-height) inside the EditableText
+  // Apply block-level style (text-align, line-height, text-indent, letter-spacing, padding-left) inside the EditableText
   const applyBlockStyle = (
-    prop: 'textAlign' | 'lineHeight',
+    prop: 'textAlign' | 'lineHeight' | 'textIndent' | 'letterSpacing' | 'paddingLeft',
     val: string
   ) => {
     const el = ref.current;
@@ -295,6 +335,17 @@ export const EditableText: React.FC<EditableTextProps> = ({
     }
 
     wrapper.style[prop] = val;
+    // Also propagate to any inner paragraph divs so multi-paragraph blocks stay consistent
+    const innerBlocks = wrapper.querySelectorAll('div, p');
+    innerBlocks.forEach((child) => {
+      (child as HTMLElement).style[prop] = val;
+    });
+
+    if (prop === 'textIndent') setCurrentTextIndent(val);
+    if (prop === 'paddingLeft') setCurrentPaddingLeft(val);
+    if (prop === 'lineHeight') setCurrentLineHeight(val);
+    if (prop === 'letterSpacing') setCurrentLetterSpacing(val);
+
     commitDomChange();
   };
 
@@ -347,6 +398,16 @@ export const EditableText: React.FC<EditableTextProps> = ({
         onFocus={() => {
           setIsFocused(true);
           saveSelection();
+          updateToolbarPosition();
+        }}
+        onInput={(e: React.FormEvent<HTMLElement>) => {
+          let nextHtml = e.currentTarget.innerHTML;
+          if (isNowrap) {
+            nextHtml = nextHtml.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?(div|p)[^>]*>/gi, '').trim();
+          }
+          if (nextHtml !== value) {
+            onChange(nextHtml);
+          }
           updateToolbarPosition();
         }}
         onKeyUp={() => {
@@ -430,7 +491,7 @@ export const EditableText: React.FC<EditableTextProps> = ({
                 : 'translate(-50%, -100%)',
               zIndex: 9999,
             }}
-            className="bg-zinc-900/95 backdrop-blur-md border border-zinc-700 text-zinc-100 rounded-lg shadow-[0_8px_28px_rgba(0,0,0,0.45)] px-2 py-1.5 flex items-center gap-1 select-none max-w-[calc(100vw-24px)] overflow-x-auto"
+            className="bg-zinc-900/95 backdrop-blur-md border border-zinc-700 text-zinc-100 rounded-lg shadow-[0_8px_28px_rgba(0,0,0,0.45)] px-2 py-1.5 flex items-center flex-wrap gap-1 select-none max-w-[calc(100vw-24px)]"
           >
             {/* 1. Font Size Controls (A- | Size Select | A+) */}
             <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded px-1 py-0.5 gap-0.5">
@@ -534,7 +595,7 @@ export const EditableText: React.FC<EditableTextProps> = ({
                     marginTop: toolbarPos.placeBelow ? '6px' : undefined,
                     marginBottom: toolbarPos.placeBelow ? undefined : '6px',
                   }}
-                  className="bg-zinc-900 border border-zinc-700 rounded-lg p-2 shadow-xl flex items-center gap-1.5 z-50 max-w-[calc(100vw-32px)] overflow-x-auto"
+                  className="bg-zinc-900 border border-zinc-700 rounded-lg p-2 shadow-xl flex items-center gap-1.5 z-50"
                 >
                   {TEXT_COLOR_PRESETS.map((c) => (
                     <button
@@ -590,7 +651,7 @@ export const EditableText: React.FC<EditableTextProps> = ({
                     marginTop: toolbarPos.placeBelow ? '6px' : undefined,
                     marginBottom: toolbarPos.placeBelow ? undefined : '6px',
                   }}
-                  className="bg-zinc-900 border border-zinc-700 rounded-lg p-2 shadow-xl flex items-center gap-1.5 z-50 max-w-[calc(100vw-32px)] overflow-x-auto"
+                  className="bg-zinc-900 border border-zinc-700 rounded-lg p-2 shadow-xl flex items-center gap-1.5 z-50"
                 >
                   {HIGHLIGHT_COLOR_PRESETS.map((c) => (
                     <button
@@ -652,7 +713,29 @@ export const EditableText: React.FC<EditableTextProps> = ({
               <AlignJustify size={13} />
             </button>
 
-            {/* 6. Line Height Popover */}
+            <div className="w-[1px] h-4 bg-zinc-700/80 mx-0.5" />
+
+            {/* 6. Quick First-Line Indent 2em + Paragraph Indent Popover */}
+            <button
+              type="button"
+              onClick={() =>
+                applyBlockStyle(
+                  'textIndent',
+                  currentTextIndent === '2em' ? '0px' : '2em'
+                )
+              }
+              title={t('一键首行缩进 2字符 (2em)', 'Toggle 2-Char First-Line Indent (2em)')}
+              className={`px-1.5 py-1 rounded flex items-center gap-0.5 text-[10px] font-bold transition-colors ${
+                currentTextIndent === '2em'
+                  ? 'bg-blue-600 text-white'
+                  : 'hover:bg-zinc-800 text-zinc-200 hover:text-white'
+              }`}
+            >
+              <Indent size={12} />
+              <span>{t('缩进2字', '2em')}</span>
+            </button>
+
+            {/* 7. Paragraph & Spacing Popover */}
             <div className="relative">
               <button
                 type="button"
@@ -661,14 +744,15 @@ export const EditableText: React.FC<EditableTextProps> = ({
                     activePopover === 'lineHeight' ? null : 'lineHeight'
                   )
                 }
-                title={t('行距 (Line Height)', 'Line Spacing')}
-                className={`p-1.5 rounded transition-colors ${
+                title={t('段落缩进、行距与字距设置', 'Paragraph Indent, Line & Letter Spacing')}
+                className={`px-1.5 py-1 rounded flex items-center gap-0.5 text-[10px] font-bold transition-colors ${
                   activePopover === 'lineHeight'
                     ? 'bg-blue-600 text-white'
-                    : 'hover:bg-zinc-800 text-zinc-200'
+                    : 'hover:bg-zinc-800 text-zinc-200 hover:text-white'
                 }`}
               >
-                <MoveVertical size={13} />
+                <MoveVertical size={12} />
+                <span>{t('段落', 'Para')}</span>
               </button>
 
               {activePopover === 'lineHeight' && (
@@ -677,33 +761,115 @@ export const EditableText: React.FC<EditableTextProps> = ({
                     position: 'absolute',
                     top: toolbarPos.placeBelow ? '100%' : undefined,
                     bottom: toolbarPos.placeBelow ? undefined : '100%',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
+                    right: 0,
                     marginTop: toolbarPos.placeBelow ? '6px' : undefined,
                     marginBottom: toolbarPos.placeBelow ? undefined : '6px',
                   }}
-                  className="bg-zinc-900 border border-zinc-700 rounded-lg p-1.5 shadow-xl flex items-center gap-1 z-50 max-w-[calc(100vw-32px)] overflow-x-auto"
+                  className="bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 shadow-2xl flex flex-col gap-2 z-50 w-[235px]"
                 >
-                  {LINE_HEIGHT_OPTIONS.map((lh) => (
-                    <button
-                      key={lh}
-                      type="button"
-                      onClick={() => {
-                        applyBlockStyle('lineHeight', lh);
-                        setActivePopover(null);
-                      }}
-                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-800 hover:bg-blue-600 text-zinc-200 hover:text-white"
-                    >
-                      {lh}
-                    </button>
-                  ))}
+                  {/* First-line indent */}
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-bold text-zinc-400 flex justify-between">
+                      <span>{t('首行缩进 (First-Line Indent)', 'First-Line Indent')}</span>
+                      <span className="font-mono text-blue-400">{currentTextIndent}</span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1">
+                      {TEXT_INDENT_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.val}
+                          type="button"
+                          onClick={() => applyBlockStyle('textIndent', opt.val)}
+                          className={`py-1 rounded text-[10px] font-semibold transition-colors ${
+                            currentTextIndent === opt.val
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                          }`}
+                        >
+                          {t(opt.zh, opt.en)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Block Left Indent */}
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-bold text-zinc-400 flex justify-between">
+                      <span>{t('整段左缩进 (Block Indent)', 'Left Indent')}</span>
+                      <span className="font-mono text-blue-400">{currentPaddingLeft}</span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1">
+                      {BLOCK_PADDING_LEFT_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.val}
+                          type="button"
+                          onClick={() => applyBlockStyle('paddingLeft', opt.val)}
+                          className={`py-1 rounded text-[9.5px] font-semibold truncate px-0.5 transition-colors ${
+                            currentPaddingLeft === opt.val
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                          }`}
+                          title={t(opt.zh, opt.en)}
+                        >
+                          {opt.val}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Line Height */}
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-bold text-zinc-400 flex justify-between">
+                      <span>{t('行距 (Line Height)', 'Line Spacing')}</span>
+                      <span className="font-mono text-blue-400">{currentLineHeight}</span>
+                    </div>
+                    <div className="grid grid-cols-6 gap-1">
+                      {LINE_HEIGHT_OPTIONS.map((lh) => (
+                        <button
+                          key={lh}
+                          type="button"
+                          onClick={() => applyBlockStyle('lineHeight', lh)}
+                          className={`py-1 rounded text-[10px] font-mono font-semibold transition-colors ${
+                            currentLineHeight === lh
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                          }`}
+                        >
+                          {lh}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Letter Spacing */}
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-bold text-zinc-400 flex justify-between">
+                      <span>{t('字间距 (Letter Spacing)', 'Letter Spacing')}</span>
+                      <span className="font-mono text-blue-400">{currentLetterSpacing}</span>
+                    </div>
+                    <div className="grid grid-cols-6 gap-1">
+                      {LETTER_SPACING_OPTIONS.map((ls) => (
+                        <button
+                          key={ls.val}
+                          type="button"
+                          onClick={() => applyBlockStyle('letterSpacing', ls.val)}
+                          className={`py-1 rounded text-[9.5px] font-mono font-semibold transition-colors ${
+                            currentLetterSpacing === ls.val
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                          }`}
+                        >
+                          {t(ls.zh, ls.en)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
             <div className="w-[1px] h-4 bg-zinc-700/80 mx-0.5" />
 
-            {/* 7. Clear Formatting */}
+            {/* 8. Clear Formatting */}
             <button
               type="button"
               onClick={handleClearFormatting}

@@ -71,7 +71,6 @@ export const HomeDashboard: React.FC = () => {
   const importDocumentJson = useBulletinStore((s) => s.importDocumentJson);
   const deleteTemplate = useBulletinStore((s) => s.deleteTemplate);
   const setCurrentView = useBulletinStore((s) => s.setCurrentView);
-  const resetToDemoBulletin = useBulletinStore((s) => s.resetToDemoBulletin);
 
   const filteredDocs = documents.filter((doc) => {
     const matchesSearch =
@@ -271,27 +270,6 @@ export const HomeDashboard: React.FC = () => {
           />
           <button
             type="button"
-            onClick={() => {
-              if (
-                window.confirm(
-                  t(
-                    '确定要重置并恢复官方标准示范简报工程吗？（将清理当前临时草稿）',
-                    'Reset to clean official demo bulletin? (Cleans up current drafts)'
-                  )
-                )
-              ) {
-                resetToDemoBulletin();
-              }
-            }}
-            className="px-2.5 sm:px-3 py-1.5 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700/80 rounded-md text-xs font-semibold text-amber-300 hover:text-amber-200 flex items-center gap-1.5 transition-colors shadow-xs"
-            title={t('清理草稿并恢复官方示范简报', 'Restore Official Demo')}
-          >
-            <Sparkles size={13} />
-            <span className="hidden sm:inline">{t('恢复官方示范', 'Restore Demo')}</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => jsonInputRef.current?.click()}
             className="px-2.5 sm:px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md text-xs font-semibold text-zinc-200 flex items-center gap-1.5 transition-colors"
           >
@@ -364,7 +342,7 @@ export const HomeDashboard: React.FC = () => {
               </div>
             </button>
 
-            {/* Starter 2: Standard Demo or Clone Current Issue */}
+            {/* Starter 2: Clone Current Issue or Import Existing JSON */}
             {documents.length > 0 ? (
               <button
                 type="button"
@@ -389,20 +367,20 @@ export const HomeDashboard: React.FC = () => {
             ) : (
               <button
                 type="button"
-                onClick={() => resetToDemoBulletin()}
-                className="group bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-amber-500/50 rounded-xl p-4 text-left transition-all flex items-start gap-4 shadow-sm card-lift btn-press"
+                onClick={() => jsonInputRef.current?.click()}
+                className="group bg-zinc-900 hover:bg-zinc-800/90 border border-zinc-800 hover:border-zinc-600 rounded-xl p-4 text-left transition-all flex items-start gap-4 shadow-sm card-lift btn-press"
               >
-                <div className="w-11 h-11 rounded-lg bg-amber-950/40 group-hover:bg-amber-900/50 border border-amber-600/40 flex items-center justify-center shrink-0 text-amber-300 group-hover:scale-110 transition-transform">
-                  <Sparkles size={20} />
+                <div className="w-11 h-11 rounded-lg bg-zinc-800 group-hover:bg-zinc-750 border border-zinc-700 flex items-center justify-center shrink-0 text-zinc-200 group-hover:scale-110 transition-transform">
+                  <Upload size={20} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors">
-                    {t('载入官方标准示范简报', 'Load Official Demo Bulletin')}
+                  <div className="text-sm font-bold text-white group-hover:text-blue-300 transition-colors">
+                    {t('导入已有 JSON 简报', 'Import JSON Bulletin')}
                   </div>
                   <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
                     {t(
-                      '包含报头大图、关键指标胶囊、带图时间线与双列图文卡片的专业产业示范排版。',
-                      'Includes masthead, highlights bar, timeline events, and dual column cards.'
+                      '从本地加载先前导出的 JSON 工程文件，立即恢复所有排版与自定义样式。',
+                      'Load previously exported JSON project file to instantly restore layout and custom styles.'
                     )}
                   </p>
                 </div>
@@ -503,8 +481,8 @@ export const HomeDashboard: React.FC = () => {
                 </h3>
                 <p className="text-sm text-zinc-400 mb-8 leading-relaxed max-w-md">
                   {t(
-                    '作品库当前已完全清空。立即点击下方按钮创建第一份专属简报，或一键载入官方示范工程体验自由排版！',
-                    'Your bulletin library is empty. Click below to create your first bulletin, or load the official demo project.'
+                    '作品库当前已完全清空。立即点击下方按钮创建第一份专属简报，开启自由图文排版！',
+                    'Your bulletin library is empty. Click below to create your first bulletin and start publishing!'
                   )}
                 </p>
 
@@ -521,11 +499,11 @@ export const HomeDashboard: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => resetToDemoBulletin()}
+                    onClick={() => jsonInputRef.current?.click()}
                     className="w-full sm:w-auto px-5 py-3.5 bg-zinc-800/90 hover:bg-zinc-750 text-zinc-200 hover:text-white border border-zinc-700/80 font-semibold text-sm rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:border-zinc-600"
                   >
-                    <Sparkles size={16} className="text-amber-400" />
-                    <span>{t('载入示范工程', 'Load Demo Bulletin')}</span>
+                    <Upload size={16} className="text-zinc-300" />
+                    <span>{t('导入已有 JSON 简报', 'Import JSON Bulletin')}</span>
                   </button>
                 </div>
 
@@ -715,9 +693,12 @@ export const HomeDashboard: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => duplicateDocumentById(doc.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              duplicateDocumentById(doc.id);
+                            }}
                             title={t('复制简报', 'Duplicate')}
-                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded"
+                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors cursor-pointer"
                           >
                             <Copy size={13} />
                           </button>
@@ -725,15 +706,18 @@ export const HomeDashboard: React.FC = () => {
                             type="button"
                             onClick={(e) => handleExportDocJson(doc, e)}
                             title={t('导出 JSON', 'Export JSON')}
-                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded"
+                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors cursor-pointer"
                           >
                             <FileJson size={13} />
                           </button>
                           <button
                             type="button"
-                            onClick={() => setConfirmDeleteDoc(doc)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfirmDeleteDoc(doc);
+                            }}
                             title={t('删除简报', 'Delete')}
-                            className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded transition-colors"
+                            className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded transition-colors cursor-pointer"
                           >
                             <Trash2 size={13} />
                           </button>

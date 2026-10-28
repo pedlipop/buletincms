@@ -12,6 +12,7 @@ import {
   FlipHorizontal,
   Highlighter,
   Image as ImageIcon,
+  Indent,
   Italic,
   Layers,
   LayoutGrid,
@@ -175,6 +176,26 @@ export const RightInspector: React.FC = () => {
   const fontReaderInputRef = useRef<HTMLInputElement>(null);
   const [isTextToolOpen, setIsTextToolOpen] = useState(true);
   const [manualFontSize, setManualFontSize] = useState<number>(14);
+  const [activeTextIndent, setActiveTextIndent] = useState<string>('0px');
+  const [activePaddingLeft, setActivePaddingLeft] = useState<string>('0px');
+  const [activeLineHeight, setActiveLineHeight] = useState<string>('1.6');
+  const [activeLetterSpacing, setActiveLetterSpacing] = useState<string>('0px');
+
+  useEffect(() => {
+    const checkStyles = () => {
+      const active = lastActiveEditableRef.current || (document.activeElement as HTMLElement | null);
+      if (active && active.isContentEditable) {
+        const wrapper = active.querySelector(':scope > div[data-fmt-block="1"]') as HTMLElement | null;
+        const target = wrapper || active;
+        if (target.style.textIndent) setActiveTextIndent(target.style.textIndent);
+        if (target.style.paddingLeft) setActivePaddingLeft(target.style.paddingLeft);
+        if (target.style.lineHeight) setActiveLineHeight(target.style.lineHeight);
+        if (target.style.letterSpacing) setActiveLetterSpacing(target.style.letterSpacing);
+      }
+    };
+    document.addEventListener('selectionchange', checkStyles);
+    return () => document.removeEventListener('selectionchange', checkStyles);
+  }, []);
   const [isFontSizeMenuOpen, setIsFontSizeMenuOpen] = useState(false);
   const fontSizeMenuRef = useRef<HTMLDivElement>(null);
   const [customTextColor, setCustomTextColor] = useState<string>('#2563eb');
@@ -441,6 +462,92 @@ export const RightInspector: React.FC = () => {
     }
   };
 
+  const applyStyleToEditableElement = (
+    el: HTMLElement,
+    prop: 'textAlign' | 'lineHeight' | 'textIndent' | 'letterSpacing' | 'paddingLeft',
+    val: string
+  ) => {
+    let wrapper = el.querySelector(
+      ':scope > div[data-fmt-block="1"]'
+    ) as HTMLDivElement | null;
+
+    if (!wrapper) {
+      wrapper = document.createElement('div');
+      wrapper.setAttribute('data-fmt-block', '1');
+      while (el.firstChild) {
+        wrapper.appendChild(el.firstChild);
+      }
+      el.appendChild(wrapper);
+    }
+
+    wrapper.style[prop] = val;
+    const innerBlocks = wrapper.querySelectorAll('div, p');
+    innerBlocks.forEach((child) => {
+      (child as HTMLElement).style[prop] = val;
+    });
+
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  const formatParagraphStyle = (
+    prop: 'textAlign' | 'lineHeight' | 'textIndent' | 'letterSpacing' | 'paddingLeft',
+    val: string
+  ) => {
+    const activeEl = lastActiveEditableRef.current;
+    const blockContainer = selectedChildBlockId
+      ? (document.querySelector(`[data-block-id="${selectedChildBlockId}"]`) as HTMLElement | null)
+      : null;
+
+    if (prop === 'textIndent') setActiveTextIndent(val);
+    if (prop === 'paddingLeft') setActivePaddingLeft(val);
+    if (prop === 'lineHeight') setActiveLineHeight(val);
+    if (prop === 'letterSpacing') setActiveLetterSpacing(val);
+
+    if (
+      activeEl &&
+      document.body.contains(activeEl) &&
+      (!blockContainer || blockContainer.contains(activeEl))
+    ) {
+      applyStyleToEditableElement(activeEl, prop, val);
+    } else if (blockContainer) {
+      const editables = Array.from(
+        blockContainer.querySelectorAll('[contenteditable="true"]')
+      ) as HTMLElement[];
+      const targetEl = editables[editables.length - 1] || editables[0];
+      if (targetEl) {
+        lastActiveEditableRef.current = targetEl;
+        applyStyleToEditableElement(targetEl, prop, val);
+      }
+    }
+
+    if (selectedRoot && selectedChild) {
+      if (selectedChild.type === 'intro_quote_box') {
+        updateContentBlock(selectedRoot.id, selectedChild.id, (prev) => {
+          const cur = prev as IntroQuoteBoxBlock;
+          return {
+            ...cur,
+            ...(prop === 'textAlign' ? { textAlign: val as IntroQuoteBoxBlock['textAlign'] } : {}),
+            ...(prop === 'textIndent' ? { textIndent: val } : {}),
+            ...(prop === 'lineHeight' ? { lineHeight: parseFloat(val) || 1.65 } : {}),
+            ...(prop === 'letterSpacing' ? { letterSpacing: val } : {}),
+          };
+        });
+      } else if (selectedChild.type === 'simple_text_block') {
+        updateContentBlock(selectedRoot.id, selectedChild.id, (prev) => {
+          const cur = prev as SimpleTextBlock;
+          return {
+            ...cur,
+            ...(prop === 'textAlign' ? { textAlign: val as SimpleTextBlock['textAlign'] } : {}),
+            ...(prop === 'textIndent' ? { textIndent: val } : {}),
+            ...(prop === 'lineHeight' ? { lineHeight: parseFloat(val) || 1.6 } : {}),
+            ...(prop === 'letterSpacing' ? { letterSpacing: val } : {}),
+            ...(prop === 'paddingLeft' ? { bodyPaddingLeft: parseInt(val, 10) || 0 } : {}),
+          };
+        });
+      }
+    }
+  };
+
   const formatFontSize = (px: number) => {
     const clamped = Math.max(8, Math.min(96, Math.round(px)));
     setManualFontSize(clamped);
@@ -620,7 +727,7 @@ export const RightInspector: React.FC = () => {
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      execCmd('justifyLeft');
+                      formatParagraphStyle('textAlign', 'left');
                     }}
                     className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
                     title={t('左对齐', 'Align Left')}
@@ -631,7 +738,7 @@ export const RightInspector: React.FC = () => {
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      execCmd('justifyCenter');
+                      formatParagraphStyle('textAlign', 'center');
                     }}
                     className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
                     title={t('居中对齐', 'Align Center')}
@@ -642,7 +749,7 @@ export const RightInspector: React.FC = () => {
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      execCmd('justifyRight');
+                      formatParagraphStyle('textAlign', 'right');
                     }}
                     className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
                     title={t('右对齐', 'Align Right')}
@@ -653,7 +760,7 @@ export const RightInspector: React.FC = () => {
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      execCmd('justifyFull');
+                      formatParagraphStyle('textAlign', 'justify');
                     }}
                     className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
                     title={t('两端对齐', 'Justify')}
@@ -761,6 +868,164 @@ export const RightInspector: React.FC = () => {
                   >
                     <Plus size={13} />
                   </button>
+                </div>
+
+                {/* 3.5 Paragraph & Indent Settings (首行缩进、整段缩进、行距、字距) */}
+                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 space-y-2.5">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-zinc-200">
+                    <span className="flex items-center gap-1.5">
+                      <Indent size={12} className="text-amber-400" />
+                      <span>{t('段落与缩进', 'Paragraph & Indent')}</span>
+                    </span>
+                    <span className="text-[10px] font-normal text-zinc-500">
+                      {t('点击段落即生效', 'Click text to apply')}
+                    </span>
+                  </div>
+
+                  {/* First-Line Indent (首行缩进) */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                      <span className="font-semibold">{t('首行缩进', 'First-Line Indent')}</span>
+                      <span className="text-[9px] text-amber-400 font-medium">
+                        {t('中文排版标准 2字', 'Standard: 2 chars')}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1 bg-zinc-900/90 p-1 rounded-md border border-zinc-800">
+                      {[
+                        { val: '0px', zh: '顶格', en: 'None' },
+                        { val: '1em', zh: '1字', en: '1em' },
+                        { val: '2em', zh: '2字', en: '2em' },
+                        { val: '3em', zh: '3字', en: '3em' },
+                        { val: '4em', zh: '4字', en: '4em' },
+                      ].map((opt) => {
+                        const isCur = activeTextIndent === opt.val;
+                        return (
+                          <button
+                            key={opt.val}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              formatParagraphStyle('textIndent', opt.val);
+                            }}
+                            className={`py-1 rounded text-[10.5px] font-medium transition-all cursor-pointer ${
+                              isCur
+                                ? 'bg-amber-400 text-zinc-950 font-bold shadow-xs'
+                                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
+                            }`}
+                          >
+                            {t(opt.zh, opt.en)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Block Left Indent (整段左缩进) */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                      <span className="font-semibold">{t('整段左缩进', 'Left Indent')}</span>
+                      <span className="text-[9px] text-zinc-500 font-mono">
+                        {activePaddingLeft}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1 bg-zinc-900/90 p-1 rounded-md border border-zinc-800">
+                      {[
+                        { val: '0px', zh: '无', en: '0' },
+                        { val: '8px', zh: '8px', en: '8px' },
+                        { val: '14px', zh: '对齐标', en: 'Icon' },
+                        { val: '20px', zh: '20px', en: '20px' },
+                        { val: '28px', zh: '28px', en: '28px' },
+                      ].map((opt) => {
+                        const isCur = activePaddingLeft === opt.val;
+                        return (
+                          <button
+                            key={opt.val}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              formatParagraphStyle('paddingLeft', opt.val);
+                            }}
+                            className={`py-1 rounded text-[10px] font-medium transition-all cursor-pointer truncate px-0.5 ${
+                              isCur
+                                ? 'bg-blue-600 text-white font-bold shadow-xs'
+                                : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
+                            }`}
+                            title={opt.val === '14px' ? t('缩进 14px，与标题前的方形标对齐', '14px: Align with heading bullet icon') : opt.val}
+                          >
+                            {t(opt.zh, opt.en)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Line Height & Letter Spacing */}
+                  <div className="grid grid-cols-2 gap-2 pt-0.5">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                        <span className="font-semibold">{t('行距', 'Line Height')}</span>
+                        <span className="text-[9px] text-zinc-500 font-mono">{activeLineHeight}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-0.5 bg-zinc-900/90 p-0.5 rounded-md border border-zinc-800">
+                        {['1.2', '1.4', '1.6', '1.75', '1.9', '2.1'].map((lh) => {
+                          const isCur = activeLineHeight === lh;
+                          return (
+                            <button
+                              key={lh}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                formatParagraphStyle('lineHeight', lh);
+                              }}
+                              className={`py-0.5 rounded text-[10px] font-mono transition-all cursor-pointer ${
+                                isCur
+                                  ? 'bg-zinc-100 text-zinc-950 font-bold shadow-xs'
+                                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                              }`}
+                            >
+                              {lh}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                        <span className="font-semibold">{t('字距', 'Letter Spacing')}</span>
+                        <span className="text-[9px] text-zinc-500 font-mono">{activeLetterSpacing}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-0.5 bg-zinc-900/90 p-0.5 rounded-md border border-zinc-800">
+                        {[
+                          { val: '0px', label: t('标准', '0') },
+                          { val: '0.5px', label: '0.5' },
+                          { val: '1px', label: '1px' },
+                          { val: '1.5px', label: '1.5' },
+                          { val: '2px', label: '2px' },
+                          { val: '3px', label: '3px' },
+                        ].map((ls) => {
+                          const isCur = activeLetterSpacing === ls.val;
+                          return (
+                            <button
+                              key={ls.val}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                formatParagraphStyle('letterSpacing', ls.val);
+                              }}
+                              className={`py-0.5 rounded text-[10px] font-mono transition-all cursor-pointer ${
+                                isCur
+                                  ? 'bg-zinc-100 text-zinc-950 font-bold shadow-xs'
+                                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                              }`}
+                            >
+                              {ls.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* 4. Text Color - Large Swatches + Custom Picker */}
@@ -2217,8 +2482,8 @@ export const RightInspector: React.FC = () => {
             {selectedChild.type === 'simple_text_block' && (() => {
               const b = selectedChild as SimpleTextBlock;
               return (
-                <div className="space-y-2 text-xs text-zinc-300">
-                  <div className="grid grid-cols-3 gap-1.5">
+                <div className="space-y-3 text-xs text-zinc-300">
+                  <div className="grid grid-cols-3 gap-1.5 bg-zinc-900/90 border border-zinc-700/80 rounded p-2">
                     <label className="flex items-center gap-1 cursor-pointer">
                       <input
                         type="checkbox"
@@ -2261,6 +2526,94 @@ export const RightInspector: React.FC = () => {
                       />
                       <span>{t('正文', 'Body')}</span>
                     </label>
+                  </div>
+
+                  {/* Paragraph Alignment */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('段落对齐方式', 'Paragraph Alignment')}
+                    </label>
+                    <div className="grid grid-cols-4 gap-1">
+                      {(
+                        [
+                          { id: 'left', zh: '左对齐', en: 'Left' },
+                          { id: 'center', zh: '居中', en: 'Center' },
+                          { id: 'right', zh: '右对齐', en: 'Right' },
+                          { id: 'justify', zh: '两端', en: 'Justify' },
+                        ] as const
+                      ).map((al) => (
+                        <button
+                          key={al.id}
+                          type="button"
+                          onClick={() => formatParagraphStyle('textAlign', al.id)}
+                          className={`py-1 rounded text-[10px] font-semibold border ${
+                            b.textAlign === al.id
+                              ? 'bg-blue-600 text-white border-blue-400'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          {t(al.zh, al.en)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* First-line Indent */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('首行缩进 (First-Line Indent)', 'First-Line Indent')}
+                    </label>
+                    <div className="grid grid-cols-5 gap-1">
+                      {[
+                        { val: '0px', zh: '顶格', en: 'None' },
+                        { val: '1em', zh: '1字符', en: '1em' },
+                        { val: '2em', zh: '2字符', en: '2em' },
+                        { val: '3em', zh: '3字符', en: '3em' },
+                        { val: '4em', zh: '4字符', en: '4em' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.val}
+                          type="button"
+                          onClick={() => formatParagraphStyle('textIndent', opt.val)}
+                          className={`py-1 rounded text-[10px] font-semibold border ${
+                            (b.textIndent || '0px') === opt.val
+                              ? 'bg-blue-600 text-white border-blue-400'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          {t(opt.zh, opt.en)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Left Block Indent */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('正文整段左缩进', 'Body Left Block Indent')}
+                    </label>
+                    <div className="grid grid-cols-5 gap-1">
+                      {[
+                        { val: 0, label: '0px' },
+                        { val: 8, label: '8px' },
+                        { val: 14, label: t('对齐标题', '14px') },
+                        { val: 20, label: '20px' },
+                        { val: 28, label: '28px' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.val}
+                          type="button"
+                          onClick={() => formatParagraphStyle('paddingLeft', `${opt.val}px`)}
+                          className={`py-1 rounded text-[10px] font-semibold border truncate px-0.5 ${
+                            (b.bodyPaddingLeft || 0) === opt.val
+                              ? 'bg-blue-600 text-white border-blue-400'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               );
@@ -2934,32 +3287,150 @@ export const RightInspector: React.FC = () => {
             {selectedChild.type === 'intro_quote_box' && (() => {
               const b = selectedChild as IntroQuoteBoxBlock;
               return (
-                <div className="grid grid-cols-3 gap-1 text-xs">
-                  {(
-                    [
-                      { id: 'dashed', zh: '虚线框', en: 'Dashed' },
-                      { id: 'solid', zh: '实线框', en: 'Solid' },
-                      { id: 'none', zh: '无边框', en: 'None' },
-                    ] as const
-                  ).map((bs) => (
-                    <button
-                      key={bs.id}
-                      type="button"
-                      onClick={() =>
-                        updateContentBlock(selectedRoot.id, b.id, (prev) => ({
-                          ...prev,
-                          borderStyle: bs.id,
-                        } as IntroQuoteBoxBlock))
-                      }
-                      className={`py-1 rounded text-[10px] font-semibold border ${
-                        b.borderStyle === bs.id
-                          ? 'bg-zinc-100 text-zinc-900 border-white'
-                          : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                      }`}
-                    >
-                      {t(bs.zh, bs.en)}
-                    </button>
-                  ))}
+                <div className="space-y-3 text-xs">
+                  {/* Border Style */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('边框样式', 'Border Style')}
+                    </label>
+                    <div className="grid grid-cols-3 gap-1">
+                      {(
+                        [
+                          { id: 'dashed', zh: '虚线框', en: 'Dashed' },
+                          { id: 'solid', zh: '实线框', en: 'Solid' },
+                          { id: 'none', zh: '无边框', en: 'None' },
+                        ] as const
+                      ).map((bs) => (
+                        <button
+                          key={bs.id}
+                          type="button"
+                          onClick={() =>
+                            updateContentBlock(selectedRoot.id, b.id, (prev) => ({
+                              ...prev,
+                              borderStyle: bs.id,
+                            } as IntroQuoteBoxBlock))
+                          }
+                          className={`py-1 rounded text-[10px] font-semibold border ${
+                            b.borderStyle === bs.id
+                              ? 'bg-zinc-100 text-zinc-900 border-white'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                          }`}
+                        >
+                          {t(bs.zh, bs.en)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Paragraph Alignment */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('段落对齐方式', 'Paragraph Alignment')}
+                    </label>
+                    <div className="grid grid-cols-4 gap-1">
+                      {(
+                        [
+                          { id: 'left', zh: '左对齐', en: 'Left' },
+                          { id: 'center', zh: '居中', en: 'Center' },
+                          { id: 'right', zh: '右对齐', en: 'Right' },
+                          { id: 'justify', zh: '两端', en: 'Justify' },
+                        ] as const
+                      ).map((al) => (
+                        <button
+                          key={al.id}
+                          type="button"
+                          onClick={() => formatParagraphStyle('textAlign', al.id)}
+                          className={`py-1 rounded text-[10px] font-semibold border ${
+                            b.textAlign === al.id
+                              ? 'bg-blue-600 text-white border-blue-400'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          {t(al.zh, al.en)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* First-line Indent (首行缩进) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-semibold text-zinc-400">
+                        {t('首行缩进 (First-Line Indent)', 'First-Line Indent')}
+                      </label>
+                      <span className="text-[9px] text-amber-400 font-semibold">
+                        {t('中文推荐 2字符', '2em for CJK')}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1">
+                      {[
+                        { val: '0px', zh: '顶格', en: 'None' },
+                        { val: '1em', zh: '1字符', en: '1em' },
+                        { val: '2em', zh: '2字符', en: '2em' },
+                        { val: '3em', zh: '3字符', en: '3em' },
+                        { val: '4em', zh: '4字符', en: '4em' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.val}
+                          type="button"
+                          onClick={() => formatParagraphStyle('textIndent', opt.val)}
+                          className={`py-1 rounded text-[10px] font-semibold border ${
+                            (b.textIndent || '0px') === opt.val
+                              ? 'bg-blue-600 text-white border-blue-400'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          {t(opt.zh, opt.en)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Box Padding X & Y (文本框内边距) */}
+                  <div className="bg-zinc-900/80 border border-zinc-800 rounded p-2 space-y-2">
+                    <div>
+                      <div className="flex justify-between text-[10px] text-zinc-400">
+                        <span>{t('左右内边距 (Horizontal Padding)', 'Padding X')}</span>
+                        <span className="font-mono text-zinc-200">{b.paddingX ?? 14}px</span>
+                      </div>
+                      <RangeSliderWithDefault
+                        min={0}
+                        max={36}
+                        step={2}
+                        value={b.paddingX ?? 14}
+                        defaultValue={14}
+                        unit="px"
+                        lang={lang}
+                        onChange={(val) =>
+                          updateContentBlock(selectedRoot.id, b.id, (prev) => ({
+                            ...prev,
+                            paddingX: val,
+                          } as IntroQuoteBoxBlock))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-[10px] text-zinc-400">
+                        <span>{t('上下内边距 (Vertical Padding)', 'Padding Y')}</span>
+                        <span className="font-mono text-zinc-200">{b.paddingY ?? 12}px</span>
+                      </div>
+                      <RangeSliderWithDefault
+                        min={0}
+                        max={32}
+                        step={2}
+                        value={b.paddingY ?? 12}
+                        defaultValue={12}
+                        unit="px"
+                        lang={lang}
+                        onChange={(val) =>
+                          updateContentBlock(selectedRoot.id, b.id, (prev) => ({
+                            ...prev,
+                            paddingY: val,
+                          } as IntroQuoteBoxBlock))
+                        }
+                      />
+                    </div>
+                  </div>
                 </div>
               );
             })()}
