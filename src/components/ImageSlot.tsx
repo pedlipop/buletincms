@@ -181,6 +181,7 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
       setResizingDims({ width: newWidth, height: newHeight });
 
       updateImageSlotById(slot.id, {
+        aspectRatio: 'free',
         frameWidthMode: 'custom_px',
         frameCustomWidthPx: newWidth,
         frameHeightMode: 'custom_px',

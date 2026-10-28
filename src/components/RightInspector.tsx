@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ArrowUp,
   Bold,
+  ChevronDown,
   FlipHorizontal,
   Highlighter,
   Image as ImageIcon,
@@ -172,12 +173,28 @@ export const RightInspector: React.FC = () => {
   const containerBgInputRef = useRef<HTMLInputElement>(null);
   const cornerStickerInputRef = useRef<HTMLInputElement>(null);
   const fontReaderInputRef = useRef<HTMLInputElement>(null);
-  const [isTextToolOpen, setIsTextToolOpen] = useState(false);
+  const [isTextToolOpen, setIsTextToolOpen] = useState(true);
   const [manualFontSize, setManualFontSize] = useState<number>(14);
+  const [isFontSizeMenuOpen, setIsFontSizeMenuOpen] = useState(false);
+  const fontSizeMenuRef = useRef<HTMLDivElement>(null);
   const [customTextColor, setCustomTextColor] = useState<string>('#2563eb');
   const [customHiliteColor, setCustomHiliteColor] = useState<string>('#fef08a');
   const lastActiveEditableRef = useRef<HTMLElement | null>(null);
   const lastRangeRef = useRef<Range | null>(null);
+
+  useEffect(() => {
+    if (!isFontSizeMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        fontSizeMenuRef.current &&
+        !fontSizeMenuRef.current.contains(e.target as Node)
+      ) {
+        setIsFontSizeMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isFontSizeMenuOpen]);
 
   useEffect(() => {
     const handleSelection = () => {
@@ -523,17 +540,12 @@ export const RightInspector: React.FC = () => {
             {isTextToolOpen && (
               <div className="space-y-3.5 pt-0.5">
                 {/* 1. Global Font Family */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
-                    <span>{t('全局排版字体', 'Font Family')}</span>
-                    <span className="font-mono text-[10px] text-zinc-500 truncate max-w-[130px]">
-                      {doc.fontFamily || t('系统默认', 'Default')}
-                    </span>
-                  </div>
+                <div>
                   <select
                     value={doc.fontFamily || ''}
                     onChange={(e) => updateDocumentMeta({ fontFamily: e.target.value })}
                     className="w-full bg-zinc-950 border border-zinc-700 hover:border-zinc-500 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-amber-400 transition-colors cursor-pointer"
+                    title={t('全局排版字体', 'Font Family')}
                   >
                     <option value="">{t('系统默认黑体 (Inter / 苹方)', 'System Default (Inter)')}</option>
                     <optgroup label={t('精选字体预设', 'Curated Web Fonts')}>
@@ -556,183 +568,199 @@ export const RightInspector: React.FC = () => {
                 </div>
 
                 {/* 2. Style & Alignment Toolbar */}
-                <div className="space-y-1">
-                  <div className="text-[11px] text-zinc-400 font-medium">
-                    {t('快捷文字样式与对齐', 'Style & Alignment')}
-                  </div>
-                  <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-800 rounded-lg p-1">
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        execCmd('bold');
-                      }}
-                      className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-xs transition-colors"
-                      title={t('加粗 (Bold)', 'Bold')}
-                    >
-                      <Bold size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        execCmd('italic');
-                      }}
-                      className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
-                      title={t('斜体 (Italic)', 'Italic')}
-                    >
-                      <Italic size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        execCmd('underline');
-                      }}
-                      className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
-                      title={t('下划线 (Underline)', 'Underline')}
-                    >
-                      <Underline size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        execCmd('strikeThrough');
-                      }}
-                      className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
-                      title={t('删除线', 'Strikethrough')}
-                    >
-                      <Strikethrough size={13} />
-                    </button>
+                <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-800 rounded-lg p-1">
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      execCmd('bold');
+                    }}
+                    className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-xs transition-colors"
+                    title={t('加粗 (Bold)', 'Bold')}
+                  >
+                    <Bold size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      execCmd('italic');
+                    }}
+                    className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
+                    title={t('斜体 (Italic)', 'Italic')}
+                  >
+                    <Italic size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      execCmd('underline');
+                    }}
+                    className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
+                    title={t('下划线 (Underline)', 'Underline')}
+                  >
+                    <Underline size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      execCmd('strikeThrough');
+                    }}
+                    className="flex-1 h-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center text-xs transition-colors"
+                    title={t('删除线', 'Strikethrough')}
+                  >
+                    <Strikethrough size={13} />
+                  </button>
 
-                    <div className="h-5 w-px bg-zinc-800 mx-0.5" />
+                  <div className="h-5 w-px bg-zinc-800 mx-0.5" />
 
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        execCmd('justifyLeft');
-                      }}
-                      className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
-                      title={t('左对齐', 'Align Left')}
-                    >
-                      <AlignLeft size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        execCmd('justifyCenter');
-                      }}
-                      className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
-                      title={t('居中对齐', 'Align Center')}
-                    >
-                      <AlignCenter size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        execCmd('justifyRight');
-                      }}
-                      className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
-                      title={t('右对齐', 'Align Right')}
-                    >
-                      <AlignRight size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        execCmd('justifyFull');
-                      }}
-                      className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
-                      title={t('两端对齐', 'Justify')}
-                    >
-                      <AlignJustify size={13} />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      execCmd('justifyLeft');
+                    }}
+                    className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                    title={t('左对齐', 'Align Left')}
+                  >
+                    <AlignLeft size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      execCmd('justifyCenter');
+                    }}
+                    className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                    title={t('居中对齐', 'Align Center')}
+                  >
+                    <AlignCenter size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      execCmd('justifyRight');
+                    }}
+                    className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                    title={t('右对齐', 'Align Right')}
+                  >
+                    <AlignRight size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      execCmd('justifyFull');
+                    }}
+                    className="h-8 w-8 rounded-md bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors"
+                    title={t('两端对齐', 'Justify')}
+                  >
+                    <AlignJustify size={13} />
+                  </button>
                 </div>
 
-                {/* 3. Manual Font Size Setting & Quick Presets */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
-                    <span>{t('选区字号精确调节', 'Font Size (Manual & Quick)')}</span>
-                    <span className="text-[10px] text-zinc-500 font-mono">px</span>
-                  </div>
+                {/* 3. Font Size Combobox (Manual Input + Presets Dropdown) */}
+                <div className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-lg p-1.5 relative">
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      const next = Math.max(8, (manualFontSize || 14) - 1);
+                      formatFontSize(next);
+                    }}
+                    className="w-7 h-7 rounded bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-sm transition-colors cursor-pointer shrink-0"
+                    title={t('字号减小 (-1px)', 'Decrease Size (-1px)')}
+                  >
+                    <Minus size={13} />
+                  </button>
 
-                  {/* Stepper + Manual Input */}
-                  <div className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-lg p-1.5">
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        const next = Math.max(8, manualFontSize - 1);
-                        formatFontSize(next);
-                      }}
-                      className="w-7 h-7 rounded bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
-                      title={t('字号减小 (-1px)', 'Decrease Size (-1px)')}
-                    >
-                      <Minus size={13} />
-                    </button>
-                    <div className="flex-1 flex items-center justify-center gap-1">
+                  <div className="relative flex-1 flex items-center justify-center" ref={fontSizeMenuRef}>
+                    <div className="w-full flex items-center bg-zinc-900 border border-zinc-700 hover:border-zinc-500 focus-within:border-amber-400 rounded transition-colors overflow-hidden">
                       <input
                         type="number"
                         min={8}
                         max={96}
-                        value={manualFontSize}
+                        value={manualFontSize || ''}
                         onChange={(e) => {
-                          const val = Number(e.target.value);
+                          const val = e.target.value === '' ? 0 : Number(e.target.value);
                           setManualFontSize(val);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            formatFontSize(manualFontSize);
+                            formatFontSize(manualFontSize || 14);
+                            setIsFontSizeMenuOpen(false);
                           }
                         }}
                         onBlur={() => {
-                          formatFontSize(manualFontSize);
+                          formatFontSize(manualFontSize || 14);
                         }}
-                        className="w-14 h-7 text-center font-mono font-bold bg-zinc-900 border border-zinc-700 rounded text-amber-300 focus:border-amber-400 outline-none text-xs"
-                        title={t('输入任意字号数值，回车即时生效', 'Type exact size & press Enter')}
+                        className="flex-1 min-w-0 h-7 text-center font-mono font-bold bg-transparent text-amber-300 outline-none text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        title={t('手动输入任意字号数值，回车生效', 'Type font size & press Enter')}
                       />
-                      <span className="text-[10px] text-zinc-500 font-mono">px</span>
-                    </div>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        const next = Math.min(96, manualFontSize + 1);
-                        formatFontSize(next);
-                      }}
-                      className="w-7 h-7 rounded bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-sm transition-colors cursor-pointer"
-                      title={t('字号增大 (+1px)', 'Increase Size (+1px)')}
-                    >
-                      <Plus size={13} />
-                    </button>
-                  </div>
-
-                  {/* Quick Preset Chips */}
-                  <div className="grid grid-cols-8 gap-1">
-                    {[12, 14, 16, 18, 20, 24, 28, 32].map((s) => (
+                      <span className="text-[10px] text-zinc-500 font-mono select-none px-1">px</span>
                       <button
-                        key={s}
                         type="button"
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          formatFontSize(s);
+                          setIsFontSizeMenuOpen((prev) => !prev);
                         }}
-                        className={`h-6 rounded text-[11px] font-mono font-semibold transition-all cursor-pointer ${
-                          manualFontSize === s
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-400/60 shadow-sm'
-                            : 'bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800/80'
-                        }`}
+                        className="h-7 px-2 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-400 hover:text-zinc-200 border-l border-zinc-700 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                        title={t('常用预设字号菜单', 'Preset Font Sizes')}
                       >
-                        {s}
+                        <ChevronDown
+                          size={12}
+                          className={`transition-transform duration-150 ${
+                            isFontSizeMenuOpen ? 'rotate-180 text-amber-400' : ''
+                          }`}
+                        />
                       </button>
-                    ))}
+                    </div>
+
+                    {isFontSizeMenuOpen && (
+                      <div className="absolute top-full mt-1.5 left-0 right-0 bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl py-1.5 z-50 max-h-52 overflow-y-auto">
+                        <div className="px-2.5 py-1 text-[10px] font-semibold text-zinc-400 border-b border-zinc-800 flex justify-between items-center mb-1">
+                          <span>{t('常用预设字号', 'Preset Sizes')}</span>
+                          <span className="text-zinc-500 font-mono">px</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-1 px-1.5">
+                          {[9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 64, 72].map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                formatFontSize(s);
+                                setIsFontSizeMenuOpen(false);
+                              }}
+                              className={`h-6 rounded text-xs font-mono transition-all flex items-center justify-center cursor-pointer ${
+                                manualFontSize === s
+                                  ? 'bg-amber-500/25 text-amber-300 border border-amber-400/70 font-bold shadow-sm'
+                                  : 'bg-zinc-950 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800/70'
+                              }`}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      const next = Math.min(96, (manualFontSize || 14) + 1);
+                      formatFontSize(next);
+                    }}
+                    className="w-7 h-7 rounded bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-700 text-zinc-200 hover:text-white flex items-center justify-center font-bold text-sm transition-colors cursor-pointer shrink-0"
+                    title={t('字号增大 (+1px)', 'Increase Size (+1px)')}
+                  >
+                    <Plus size={13} />
+                  </button>
                 </div>
 
                 {/* 4. Text Color - Large Swatches + Custom Picker */}
@@ -1136,11 +1164,21 @@ export const RightInspector: React.FC = () => {
                       <button
                         key={ratio}
                         type="button"
-                        onClick={() =>
-                          updateSelectedSlotWithSync({
-                            aspectRatio: ratio,
-                          })
-                        }
+                        onClick={() => {
+                          if (ratio === 'free') {
+                            updateSelectedSlotWithSync({
+                              aspectRatio: 'free',
+                              frameWidthMode: 'custom_px',
+                              frameCustomWidthPx:
+                                selectedImageSlot.frameCustomWidthPx || 320,
+                            });
+                          } else {
+                            updateSelectedSlotWithSync({
+                              aspectRatio: ratio,
+                              frameHeightMode: 'aspect',
+                            });
+                          }
+                        }}
                         className={`py-1 rounded text-[10px] font-bold transition-colors ${
                           selectedImageSlot.aspectRatio === ratio
                             ? 'bg-blue-600 text-white shadow-sm'
@@ -1165,7 +1203,7 @@ export const RightInspector: React.FC = () => {
                       <button
                         type="button"
                         onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
+                          updateSelectedSlotWithSync({
                             frameWidthMode: 'full',
                             frameHeightMode: 'aspect',
                             frameAlign: 'center',
@@ -1201,15 +1239,21 @@ export const RightInspector: React.FC = () => {
                           <button
                             key={item.mode}
                             type="button"
-                            onClick={() =>
-                              updateImageSlotById(selectedImageSlot.id, {
-                                frameWidthMode: item.mode,
-                                frameCustomWidthPx:
-                                  item.mode === 'custom_px'
-                                    ? selectedImageSlot.frameCustomWidthPx || 320
-                                    : selectedImageSlot.frameCustomWidthPx,
-                              })
-                            }
+                            onClick={() => {
+                              if (item.mode === 'custom_px') {
+                                updateSelectedSlotWithSync({
+                                  frameWidthMode: 'custom_px',
+                                  frameCustomWidthPx:
+                                    selectedImageSlot.frameCustomWidthPx || 320,
+                                  aspectRatio: 'free',
+                                });
+                              } else {
+                                updateSelectedSlotWithSync({
+                                  frameWidthMode: item.mode,
+                                  frameCustomWidthPx: selectedImageSlot.frameCustomWidthPx,
+                                });
+                              }
+                            }}
                             className={`py-1 rounded text-[10px] font-bold transition-colors ${
                               isSelectedMode
                                 ? 'bg-blue-600 text-white shadow-sm'
@@ -1232,9 +1276,10 @@ export const RightInspector: React.FC = () => {
                           step={10}
                           value={selectedImageSlot.frameCustomWidthPx || 320}
                           onChange={(e) =>
-                            updateImageSlotById(selectedImageSlot.id, {
+                            updateSelectedSlotWithSync({
                               frameWidthMode: 'custom_px',
                               frameCustomWidthPx: Number(e.target.value),
+                              aspectRatio: 'free',
                             })
                           }
                           className="flex-1 h-1.5 bg-zinc-800 rounded accent-blue-500 cursor-pointer"
@@ -1255,7 +1300,7 @@ export const RightInspector: React.FC = () => {
                       <button
                         type="button"
                         onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
+                          updateSelectedSlotWithSync({
                             frameHeightMode: 'aspect',
                           })
                         }
@@ -1270,9 +1315,10 @@ export const RightInspector: React.FC = () => {
                       <button
                         type="button"
                         onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
+                          updateSelectedSlotWithSync({
                             frameHeightMode: 'custom_px',
                             frameCustomHeightPx: selectedImageSlot.frameCustomHeightPx || 200,
+                            aspectRatio: 'free',
                           })
                         }
                         className={`py-1 rounded text-[10px] font-bold transition-colors ${
@@ -1295,9 +1341,10 @@ export const RightInspector: React.FC = () => {
                           step={10}
                           value={selectedImageSlot.frameCustomHeightPx || 200}
                           onChange={(e) =>
-                            updateImageSlotById(selectedImageSlot.id, {
+                            updateSelectedSlotWithSync({
                               frameHeightMode: 'custom_px',
                               frameCustomHeightPx: Number(e.target.value),
+                              aspectRatio: 'free',
                             })
                           }
                           className="flex-1 h-1.5 bg-zinc-800 rounded accent-blue-500 cursor-pointer"
