@@ -24,6 +24,12 @@ import {
   ZoomOut,
   GripVertical,
   X,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Radio,
+  Users,
 } from 'lucide-react';
 import { domToCanvas, domToPng } from 'modern-screenshot';
 import { CanvasRenderer } from './components/CanvasRenderer';
@@ -31,6 +37,7 @@ import { FloatingContainerBar } from './components/FloatingContainerBar';
 import { HomeDashboard } from './components/HomeDashboard';
 import { LeftLibrary } from './components/LeftLibrary';
 import { RightInspector } from './components/RightInspector';
+import { collaborationService, CollaboratorUser, ConnectionStatus } from './services/collaboration';
 import { useBulletinStore } from './store/useBulletinStore';
 
 /**
@@ -124,15 +131,21 @@ export const App: React.FC = () => {
   const exportCanvasRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isCollabOpen, setIsCollabOpen] = useState(false);
+  const [collabStatus, setCollabStatus] = useState<ConnectionStatus>('disconnected');
+  const [peers, setPeers] = useState<CollaboratorUser[]>([]);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
   const [mobileTab, setMobileTab] = useState<'canvas' | 'library' | 'inspector'>('canvas');
   const shareDropdownRef = useRef<HTMLDivElement>(null);
+  const collabDropdownRef = useRef<HTMLDivElement>(null);
 
   const lang = useBulletinStore((s) => s.lang);
   const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
   const selectedRootId = useBulletinStore((s) => s.selectedRootBlockId);
   const selectedChildId = useBulletinStore((s) => s.selectedChildBlockId);
 
-  // Close share dropdown on click outside
+  // Close share & collab dropdowns on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -141,12 +154,18 @@ export const App: React.FC = () => {
       ) {
         setIsShareOpen(false);
       }
+      if (
+        collabDropdownRef.current &&
+        !collabDropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsCollabOpen(false);
+      }
     };
-    if (isShareOpen) {
+    if (isShareOpen || isCollabOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isShareOpen]);
+  }, [isShareOpen, isCollabOpen]);
 
   // Restore and register custom uploaded fonts
   const customFonts = useBulletinStore((s) => s.customFonts);
@@ -182,6 +201,37 @@ export const App: React.FC = () => {
   const updateDocumentMeta = useBulletinStore((s) => s.updateDocumentMeta);
   const toggleDocumentStatus = useBulletinStore((s) => s.toggleDocumentStatus);
   const syncRemoteDatabase = useBulletinStore((s) => s.syncRemoteDatabase);
+
+  // Check URL query param ?doc=xxx on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const docParam = params.get('doc');
+    if (docParam) {
+      const state = useBulletinStore.getState();
+      if (state.documents.some((d) => d.id === docParam)) {
+        state.switchDocument(docParam);
+      }
+    }
+  }, []);
+
+  // Sync collaboration room with active document
+  useEffect(() => {
+    if (!doc?.id) return;
+    collaborationService.joinRoom(doc.id);
+
+    const unsubStatus = collaborationService.onStatusChange(setCollabStatus);
+    const unsubPeers = collaborationService.onPeersChange(setPeers);
+    const unsubDoc = collaborationService.onDocUpdate((remoteDoc) => {
+      useBulletinStore.getState().applyRemoteDocUpdate(remoteDoc);
+    });
+
+    return () => {
+      unsubStatus();
+      unsubPeers();
+      unsubDoc();
+    };
+  }, [doc?.id]);
 
   const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false);
   const [zoomBarPos, setZoomBarPos] = useState<{ x: number; y: number } | null>(null);
@@ -226,6 +276,63 @@ export const App: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [isZoomMenuOpen]);
 
+  // Zoom canvas with center-middle focal lock (so zooming scrubs towards center middle, never jumping to top!)
+  const zoomCanvas = (targetZoom: number) => {
+    const container = mainCanvasRef.current;
+    const currentZoom = useBulletinStore.getState().zoomPercent;
+    const nextZoom = Math.min(250, Math.max(25, Math.round(targetZoom)));
+
+    if (nextZoom === currentZoom) return;
+
+    if (!container) {
+      setZoomPercent(nextZoom);
+      return;
+    }
+
+    const oldScale = currentZoom / 100;
+    const newScale = nextZoom / 100;
+
+    // Viewport center relative to the scroll container
+    const viewportCenterY = container.scrollTop + container.clientHeight / 2;
+    const viewportCenterX = container.scrollLeft + container.clientWidth / 2;
+
+    // Measure top offset of the canvas content inside the scroll container
+    const canvasWrapper = container.firstElementChild as HTMLElement | null;
+    const canvasTop = canvasWrapper ? canvasWrapper.offsetTop : 48;
+
+    // Find the unscaled content Y coordinate currently sitting at the center middle of the viewport
+    const unscaledY = (viewportCenterY - canvasTop) / oldScale;
+
+    // Calculate new position of this exact center point at the new scale
+    const newPageY = canvasTop + unscaledY * newScale;
+    const targetScrollTop = Math.max(0, Math.round(newPageY - container.clientHeight / 2));
+
+    // For horizontal centering (if canvas is wider than viewport and scrollable):
+    let targetScrollLeft = container.scrollLeft;
+    if (container.scrollWidth > container.clientWidth) {
+      const unscaledX = viewportCenterX / oldScale;
+      targetScrollLeft = Math.max(0, Math.round(unscaledX * newScale - container.clientWidth / 2));
+    }
+
+    // Apply the new zoom
+    setZoomPercent(nextZoom);
+
+    // Synchronously and in rAF update scroll position so it stays anchored to the center middle!
+    container.scrollTop = targetScrollTop;
+    if (container.scrollWidth > container.clientWidth) {
+      container.scrollLeft = targetScrollLeft;
+    }
+
+    requestAnimationFrame(() => {
+      if (container) {
+        container.scrollTop = targetScrollTop;
+        if (container.scrollWidth > container.clientWidth) {
+          container.scrollLeft = targetScrollLeft;
+        }
+      }
+    });
+  };
+
   // Automatically calculate zoom percentage to fit bulletin width to available viewport
   const handleFitToScreen = () => {
     if (!mainCanvasRef.current) return;
@@ -233,7 +340,7 @@ export const App: React.FC = () => {
     const availableWidth = mainCanvasRef.current.clientWidth - padding;
     const docWidth = doc.canvasWidth || 480;
     const fitZoom = Math.min(200, Math.max(30, Math.floor((availableWidth / docWidth) * 100)));
-    setZoomPercent(fitZoom);
+    zoomCanvas(fitZoom);
   };
 
   // Initial sync with Railway PostgreSQL / backend database on startup
@@ -269,23 +376,23 @@ export const App: React.FC = () => {
       } else if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
         if (!isEditingText) {
           e.preventDefault();
-          setZoomPercent(useBulletinStore.getState().zoomPercent + 10);
+          zoomCanvas(useBulletinStore.getState().zoomPercent + 10);
         }
       } else if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
         if (!isEditingText) {
           e.preventDefault();
-          setZoomPercent(useBulletinStore.getState().zoomPercent - 10);
+          zoomCanvas(useBulletinStore.getState().zoomPercent - 10);
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key === '0') {
         if (!isEditingText) {
           e.preventDefault();
-          setZoomPercent(100);
+          zoomCanvas(100);
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [currentView, undo, redo, setZoomPercent]);
+  }, [currentView, undo, redo, zoomCanvas]);
 
   // Canvas-specific wheel zoom listener: intercepts Ctrl+Wheel, Meta+Wheel, Alt+Wheel,
   // and trackpad pinch gestures, zooming the canvas scale instead of the browser webpage/window size!
@@ -319,7 +426,7 @@ export const App: React.FC = () => {
         }
 
         const newZoom = rawDelta > 0 ? currentZoom + step : currentZoom - step;
-        setZoomPercent(newZoom);
+        zoomCanvas(newZoom);
       }
     };
 
@@ -338,7 +445,7 @@ export const App: React.FC = () => {
         canvasEl.removeEventListener('wheel', onWheel, options);
       }
     };
-  }, [currentView, setZoomPercent]);
+  }, [currentView, zoomCanvas]);
 
   // Render Home Screen / Bulletin Library first before entering the Editor
   if (currentView === 'home') {
@@ -592,7 +699,7 @@ export const App: React.FC = () => {
           <div className="flex items-center bg-zinc-800/90 border border-zinc-700 rounded overflow-hidden text-xs">
             <button
               type="button"
-              onClick={() => setZoomPercent(zoomPercent - 10)}
+              onClick={() => zoomCanvas(zoomPercent - 10)}
               className="px-2 py-1.5 text-zinc-300 hover:bg-zinc-700"
               title={t('缩小画布', 'Zoom Out')}
             >
@@ -600,7 +707,7 @@ export const App: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setZoomPercent(100)}
+              onClick={() => zoomCanvas(100)}
               className="px-2 py-1 font-mono text-[11px] text-zinc-200 hover:bg-zinc-700"
               title={t('重置为 100%', 'Reset to 100%')}
             >
@@ -608,7 +715,7 @@ export const App: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setZoomPercent(zoomPercent + 10)}
+              onClick={() => zoomCanvas(zoomPercent + 10)}
               className="px-2 py-1.5 text-zinc-300 hover:bg-zinc-700"
               title={t('放大画布', 'Zoom In')}
             >
@@ -666,6 +773,188 @@ export const App: React.FC = () => {
           >
             {previewMode ? <EyeOff size={14} /> : <Eye size={14} />}
           </button>
+
+          {/* Real-time Collaboration Button & Popover (Placed next to Export button) */}
+          <div className="relative" ref={collabDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setIsCollabOpen(!isCollabOpen)}
+              className={`px-2.5 sm:px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 sm:gap-1.5 shadow-sm transition-all border ${
+                collabStatus === 'connected' && peers.length > 0
+                  ? 'bg-emerald-950/90 hover:bg-emerald-900 border-emerald-500/70 text-emerald-300'
+                  : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-200'
+              }`}
+              title={t('多人实时协同编辑与复制协作链接', 'Real-time Collaboration & Copy Link')}
+            >
+              <div className="relative flex items-center">
+                <Users size={13} />
+                <span
+                  className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${
+                    collabStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'
+                  }`}
+                />
+              </div>
+              <span className="hidden xs:inline">{t('实时协作', 'Collaborate')}</span>
+              {peers.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 text-[10px] font-mono rounded-full font-bold">
+                  {peers.length + 1}
+                </span>
+              )}
+            </button>
+
+            {isCollabOpen && (
+              <div className="absolute right-0 mt-1.5 w-80 max-w-[calc(100vw-24px)] bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-3.5 z-50 flex flex-col gap-3 text-xs select-none animate-spring-in">
+                {/* Header: Room & Status */}
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        collabStatus === 'connected'
+                          ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
+                          : collabStatus === 'connecting'
+                          ? 'bg-amber-400 animate-ping'
+                          : 'bg-red-400'
+                      }`}
+                    />
+                    <span className="font-bold text-white text-xs">
+                      {collabStatus === 'connected'
+                        ? t('实时协同房间已就绪', 'Collaboration Room Connected')
+                        : collabStatus === 'connecting'
+                        ? t('正在连接协作服务...', 'Connecting...')
+                        : t('未连接协作服务', 'Disconnected')}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono text-zinc-400">
+                    {peers.length + 1} {t('人在线', 'online')}
+                  </span>
+                </div>
+
+                {/* Copy Collaboration Link Section (Key Feature!) */}
+                <div className="bg-zinc-950/80 border border-zinc-800 rounded-lg p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-zinc-300">
+                      {t('分享协作链接', 'Share Collaboration Link')}
+                    </span>
+                    {copiedLink && (
+                      <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1 animate-fade-in">
+                        <Check size={11} />
+                        {t('已复制链接！', 'Link Copied!')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      readOnly
+                      value={
+                        typeof window !== 'undefined'
+                          ? `${window.location.origin}${window.location.pathname}?doc=${doc.id}`
+                          : ''
+                      }
+                      className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-[11px] font-mono text-zinc-300 focus:outline-none select-all truncate"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = `${window.location.origin}${window.location.pathname}?doc=${doc.id}`;
+                        navigator.clipboard.writeText(url);
+                        setCopiedLink(true);
+                        setTimeout(() => setCopiedLink(false), 2500);
+                      }}
+                      className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-bold flex items-center gap-1 transition-colors shrink-0 shadow-sm"
+                    >
+                      {copiedLink ? <Check size={12} /> : <Copy size={12} />}
+                      <span>{copiedLink ? t('已复制', 'Copied') : t('复制链接', 'Copy Link')}</span>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 leading-relaxed">
+                    {t(
+                      '将链接发送给同事或团队成员，对方打开即可实时加入当前简报并同步光标与修改。',
+                      'Share this link with team members to co-edit in real-time with live cursors.'
+                    )}
+                  </p>
+                </div>
+
+                {/* Collaborators List */}
+                <div className="space-y-1.5">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-400">
+                    {t('当前协作者列表', 'Active Collaborators')}
+                  </span>
+                  <div className="max-h-32 overflow-y-auto space-y-1">
+                    {/* Self */}
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded bg-zinc-800/60 border border-zinc-700/60">
+                      <div className="flex items-center gap-2">
+                        <div
+                          style={{ backgroundColor: collaborationService.getLocalUser().color }}
+                          className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                        />
+                        <span className="font-semibold text-zinc-200 text-xs">
+                          {collaborationService.getLocalUser().name}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono bg-blue-950 text-blue-300 border border-blue-700/60 px-1.5 py-0.2 rounded">
+                        {t('我 (Local)', 'You')}
+                      </span>
+                    </div>
+
+                    {/* Remote peers */}
+                    {peers.map((peer) => (
+                      <div
+                        key={peer.id}
+                        className="flex items-center justify-between px-2 py-1.5 rounded bg-zinc-850/60 border border-zinc-800"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            style={{ backgroundColor: peer.color }}
+                            className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                          />
+                          <span className="text-zinc-200 text-xs font-medium">
+                            {peer.name}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          {t('协作者', 'Peer')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Nickname & Color Settings */}
+                <div className="border-t border-zinc-800 pt-2 flex items-center justify-between gap-2">
+                  <div className="flex-1 flex items-center gap-1.5">
+                    <span className="text-[11px] text-zinc-400 shrink-0">{t('昵称:', 'Name:')}</span>
+                    <input
+                      type="text"
+                      defaultValue={collaborationService.getLocalUser().name}
+                      onBlur={(e) => {
+                        const nextName = e.target.value.trim();
+                        if (nextName) collaborationService.updateLocalUser({ name: nextName });
+                      }}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {['#3b82f6', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6'].map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => collaborationService.updateLocalUser({ color })}
+                        style={{ backgroundColor: color }}
+                        className={`w-4 h-4 rounded-full transition-transform ${
+                          collaborationService.getLocalUser().color === color
+                            ? 'scale-125 ring-2 ring-white'
+                            : 'opacity-70 hover:opacity-100'
+                        }`}
+                        title="设置光标颜色"
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Share / Export Unified Menu */}
           <div className="relative" ref={shareDropdownRef}>
@@ -872,7 +1161,7 @@ export const App: React.FC = () => {
               {/* Zoom Out */}
               <button
                 type="button"
-                onClick={() => setZoomPercent(zoomPercent - 10)}
+                onClick={() => zoomCanvas(zoomPercent - 10)}
                 disabled={zoomPercent <= 25}
                 className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 disabled:opacity-30 rounded transition-colors"
                 title={t('缩小画布 (Ctrl -)', 'Zoom Out Canvas (Ctrl -)')}
@@ -913,7 +1202,7 @@ export const App: React.FC = () => {
                       <button
                         key={z}
                         type="button"
-                        onClick={() => setZoomPercent(z)}
+                        onClick={() => zoomCanvas(z)}
                         className={`w-full text-left px-2.5 py-1 hover:bg-zinc-800 flex items-center justify-between font-mono text-[11px] ${
                           zoomPercent === z
                             ? 'text-white font-bold bg-blue-600/30'
@@ -939,7 +1228,7 @@ export const App: React.FC = () => {
               {/* Zoom In */}
               <button
                 type="button"
-                onClick={() => setZoomPercent(zoomPercent + 10)}
+                onClick={() => zoomCanvas(zoomPercent + 10)}
                 disabled={zoomPercent >= 250}
                 className="p-1.5 text-zinc-300 hover:text-white hover:bg-zinc-800 disabled:opacity-30 rounded transition-colors"
                 title={t('放大画布 (Ctrl +)', 'Zoom In Canvas (Ctrl +)')}
@@ -951,7 +1240,7 @@ export const App: React.FC = () => {
               {zoomPercent !== 100 && (
                 <button
                   type="button"
-                  onClick={() => setZoomPercent(100)}
+                  onClick={() => zoomCanvas(100)}
                   className="p-1.5 text-amber-300 hover:text-amber-200 hover:bg-zinc-800 rounded transition-colors"
                   title={t('重置为 100% 实际大小', 'Reset to 100%')}
                 >
@@ -987,7 +1276,7 @@ export const App: React.FC = () => {
           )}
         </main>
 
-        {/* Right Inspector: on desktop always visible unless previewMode. On mobile, visible when mobileTab === 'inspector' */}
+        {/* Right Inspector: on desktop always visible unless previewMode. Can be collapsed on desktop. */}
         {!previewMode && (
           <div
             className={`${
@@ -1008,9 +1297,30 @@ export const App: React.FC = () => {
                 <span>{t('返回画布', 'Back to Canvas')}</span>
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-hidden flex">
-              <RightInspector />
-            </div>
+
+            {/* Desktop Collapsed Toggle Bar */}
+            {isInspectorCollapsed ? (
+              <div className="hidden md:flex flex-col items-center py-3 px-1.5 bg-zinc-950 border-l border-zinc-800 h-full shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsInspectorCollapsed(false)}
+                  className="p-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white flex flex-col items-center gap-2 transition-all shadow-sm"
+                  title={t('展开属性设置面板', 'Expand Inspector')}
+                >
+                  <ChevronLeft size={16} />
+                  <span className="text-[10px] font-bold tracking-widest [writing-mode:vertical-lr] py-1 text-zinc-400 hover:text-zinc-200">
+                    {t('属性设置', 'INSPECTOR')}
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 overflow-hidden flex">
+                <RightInspector
+                  isCollapsed={isInspectorCollapsed}
+                  onToggleCollapse={() => setIsInspectorCollapsed(!isInspectorCollapsed)}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

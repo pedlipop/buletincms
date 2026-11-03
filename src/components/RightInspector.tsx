@@ -8,7 +8,10 @@ import {
   ArrowLeft,
   ArrowUp,
   Bold,
+  Check,
   ChevronDown,
+  ChevronRight,
+  ChevronUp,
   FlipHorizontal,
   Highlighter,
   Image as ImageIcon,
@@ -27,6 +30,7 @@ import {
   Type,
   Underline,
   Upload,
+  X,
 } from 'lucide-react';
 import {
   AspectRatioType,
@@ -53,10 +57,14 @@ import {
   SimpleTextBlock,
   SplitMediaTextBlock,
   TwoColumnCardsBlock,
+  PictureCollageBlock,
+  CollagePresetType,
+  TableBlock,
 } from '../types/bulletin';
 import {
   createCustomColumnItem,
   createImageSlot,
+  createPictureCollageItem,
   SECTION_THEMES,
   uid,
 } from '../data/presets';
@@ -165,7 +173,25 @@ const RangeSliderWithDefault: React.FC<RangeSliderWithDefaultProps> = ({
   );
 };
 
-export const RightInspector: React.FC = () => {
+const findFirstImageInBlock = (block: ContentBlock | null): ImageSlotData | null => {
+  if (!block) return null;
+  if ('image' in block && (block as any).image) return (block as any).image;
+  if ('images' in block && Array.isArray((block as any).images) && (block as any).images[0]) return (block as any).images[0];
+  if ('leftCard' in block && (block as any).leftCard?.image) return (block as any).leftCard.image;
+  if ('items' in block && Array.isArray((block as any).items)) {
+    for (const it of (block as any).items) {
+      if (it && typeof it === 'object' && 'image' in it && it.image) return it.image;
+    }
+  }
+  return null;
+};
+
+export interface RightInspectorProps {
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
+export const RightInspector: React.FC<RightInspectorProps> = ({ isCollapsed: _isCollapsed, onToggleCollapse }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const frameOverlayInputRef = useRef<HTMLInputElement>(null);
   const listCustomBulletInputRef = useRef<HTMLInputElement>(null);
@@ -174,12 +200,16 @@ export const RightInspector: React.FC = () => {
   const containerBgInputRef = useRef<HTMLInputElement>(null);
   const cornerStickerInputRef = useRef<HTMLInputElement>(null);
   const fontReaderInputRef = useRef<HTMLInputElement>(null);
-  const [isTextToolOpen, setIsTextToolOpen] = useState(true);
+    const [collapsedTools, setCollapsedTools] = useState<Record<string, boolean>>({});
+  const toggleTool = (tool: string) => setCollapsedTools((prev) => ({ ...prev, [tool]: !prev[tool] }));
+  const isToolCollapsed = (tool: string) => !!collapsedTools[tool];
+const [isTextToolOpen, setIsTextToolOpen] = useState(true);
   const [manualFontSize, setManualFontSize] = useState<number>(14);
   const [activeTextIndent, setActiveTextIndent] = useState<string>('0px');
   const [activePaddingLeft, setActivePaddingLeft] = useState<string>('0px');
   const [activeLineHeight, setActiveLineHeight] = useState<string>('1.6');
   const [activeLetterSpacing, setActiveLetterSpacing] = useState<string>('0px');
+  const [activeTableSideTab, setActiveTableSideTab] = useState<'all' | 'outer' | 'top' | 'bottom' | 'left' | 'right' | 'horizontal' | 'vertical'>('all');
 
   useEffect(() => {
     const checkStyles = () => {
@@ -275,20 +305,27 @@ export const RightInspector: React.FC = () => {
 
   const [syncAllFramesInBlock, setSyncAllFramesInBlock] = useState(true);
 
-  const selectedRoot =
+  const rawSelectedRoot =
     doc.rootBlocks.find((b) => b.id === selectedRootBlockId) || null;
 
-  const selectedChild: ContentBlock | null =
-    selectedRoot &&
-    selectedRoot.type === 'section_container' &&
+  const rawSelectedChild: ContentBlock | null =
+    rawSelectedRoot &&
+    rawSelectedRoot.type === 'section_container' &&
     selectedChildBlockId
-      ? selectedRoot.children.find((c) => c.id === selectedChildBlockId) || null
+      ? rawSelectedRoot.children.find((c) => c.id === selectedChildBlockId) || null
       : null;
 
   const selectedImageSlot = findImageSlotInDocument(doc, selectedImageSlotId);
   const slotContext = findImageSlotContext(doc, selectedImageSlotId);
-  const effectiveParentBlock = selectedChild || slotContext.childBlock;
-  const effectiveRootBlock = selectedRoot || slotContext.rootBlock;
+
+  const selectedRoot = rawSelectedRoot || slotContext.rootBlock;
+  const selectedChild = rawSelectedChild || slotContext.childBlock;
+  const effectiveParentBlock = selectedChild;
+  const effectiveRootBlock = selectedRoot;
+
+  const isDirectRootSelected = !rawSelectedChild && !selectedImageSlot && !!selectedRoot;
+  const isDirectChildSelected = !selectedImageSlot && !!rawSelectedChild;
+  const isDirectImageSelected = !!selectedImageSlot;
 
   const updateSelectedSlotWithSync = (patch: Partial<ImageSlotData>) => {
     if (!selectedImageSlot) return;
@@ -1145,759 +1182,927 @@ export const RightInspector: React.FC = () => {
         {/* ========================================================= */}
         {/* 1. SELECTED IMAGE SLOT & PHOTO FRAME INSPECTOR            */}
         {/* ========================================================= */}
-        {selectedImageSlot ? (
-          <div className="bg-zinc-800/80 border border-blue-500/40 rounded-lg p-3 space-y-3">
-            <div className="flex items-center justify-between border-b border-zinc-700/70 pb-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-                <ImageIcon size={14} className="text-blue-400" />
-                <span>{t('图片与画框设置', 'Photo & Frame')}</span>
+
+        {/* ========================================================= */}
+        {/* 1. CONTAINER INSPECTOR (PARENT / ANCESTOR LEVEL)          */}
+        {/* ========================================================= */}
+        {(() => {
+          const isCollapsed = isToolCollapsed('container');
+
+          if (!selectedRoot) {
+            return (
+              <div className="bg-zinc-900/40 border border-dashed border-zinc-750 rounded-xl p-3 space-y-2 opacity-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+                    <Palette size={13} className="text-zinc-500" />
+                    <span>{t('章节容器设置', 'Container Settings')}</span>
+                  </div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
+                    {t('未选中容器', 'Inactive')}
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-500">
+                  {t('点击画布中的任意章节容器，可在此配置底纹、边框和编号徽章。', 'Click any section container to customize theme, icons, and background.')}
+                </p>
               </div>
-              <span className="text-[10px] text-zinc-400 truncate max-w-[110px]">
-                {selectedImageSlot.label || 'IMAGE'}
-              </span>
-            </div>
+            );
+          }
 
-            {/* Photo Layout Presets & Add Photo (Displayed when clicking the photo!) */}
-            {effectiveParentBlock && effectiveParentBlock.type === 'dated_event_block' && (() => {
-              const b = effectiveParentBlock as DatedEventBlock;
-              const photoCount = b.images.length;
-              const availablePresets = getPresetsForCount(photoCount);
-              let effectivePreset: PhotoLayoutPreset = b.layoutPreset || 'auto';
-              if (effectivePreset === 'auto') {
-                if (photoCount === 6) {
-                  effectivePreset = b.gridColumns === 4 ? '4_plus_2' : b.gridColumns === 2 ? '2x3' : '3x2';
-                } else if (photoCount === 4) {
-                  effectivePreset = b.fitLastToMargin || b.gridColumns === 3 ? '3_plus_1' : b.gridColumns === 2 ? '2x2' : '3_plus_1';
-                } else if (photoCount === 3) {
-                  effectivePreset = b.fitLastToMargin || b.gridColumns === 2 ? '2_plus_1' : '3_cols';
-                } else if (photoCount === 5) {
-                  effectivePreset = '3_plus_2';
-                } else if (availablePresets[0]) {
-                  effectivePreset = availablePresets[0].id;
-                }
-              }
-
-              const handleAddPhotoFromSlot = () => {
-                if (!effectiveRootBlock) return;
-                updateContentBlock(effectiveRootBlock.id, b.id, (prev) => {
-                  const cur = prev as DatedEventBlock;
-                  const nextImgs = [
-                    ...cur.images,
-                    createImageSlot(
-                      selectedImageSlot.aspectRatio || cur.imageAspectRatio || '4:3',
-                      `PHOTO ${cur.images.length + 1}`,
-                      null
-                    ),
-                  ];
-                  let nextPreset = cur.layoutPreset;
-                  if (nextImgs.length === 4 && (!nextPreset || nextPreset === 'auto')) {
-                    nextPreset = '2x2';
-                  } else if (nextImgs.length === 6 && (!nextPreset || nextPreset === 'auto')) {
-                    nextPreset = '3x2';
-                  }
-                  return {
-                    ...cur,
-                    images: nextImgs,
-                    showImages: true,
-                    layoutPreset: nextPreset,
-                    fitLastToMargin: true,
-                  };
-                });
-              };
-
-              return (
-                <div className="bg-zinc-950/80 p-2.5 rounded-lg border border-zinc-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-                      <LayoutGrid size={13} className="text-blue-400" />
-                      <span>{t('配图排版方案预设', 'Photo Layout Presets')}</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 bg-zinc-800 text-zinc-300 rounded border border-zinc-700">
-                        {photoCount} {t('图', 'pics')}
-                      </span>
-                    </div>
+          return (
+            <div
+              className={`rounded-xl p-3 space-y-3 transition-all ${
+                isDirectRootSelected
+                  ? 'bg-zinc-850 border-2 border-blue-500/80 shadow-md ring-1 ring-blue-500/30'
+                  : 'bg-zinc-850/60 border border-zinc-700/60'
+              }`}
+            >
+              <div className="flex items-center justify-between border-b border-zinc-700/60 pb-2">
+                <div className="flex items-center gap-2 text-xs font-bold truncate max-w-[210px]">
+                  <Palette size={14} className={isDirectRootSelected ? 'text-blue-400 shrink-0' : 'text-zinc-400 shrink-0'} />
+                  <span className={isDirectRootSelected ? 'text-white truncate' : 'text-zinc-200 truncate'}>
+                    {selectedRoot.type === 'section_container'
+                      ? selectedRoot.showHeader === false
+                        ? t('空白自由容器', 'Blank Container')
+                        : `[${selectedRoot.sectionNumber || '1'}] ${selectedRoot.title || t('章节容器', 'Section')}`
+                      : selectedRoot.type === 'masthead'
+                      ? t('报头封面横幅', 'Masthead')
+                      : selectedRoot.type === 'highlights_bar'
+                      ? t('本期看点栏', 'Highlights')
+                      : t('页脚收尾横幅', 'Footer Banner')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {isDirectRootSelected ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold">
+                      {t('当前编辑容器', 'Active')}
+                    </span>
+                  ) : (
                     <button
                       type="button"
-                      onClick={handleAddPhotoFromSlot}
-                      className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] font-semibold transition"
+                      onClick={() => {
+                        selectImageSlot(null);
+                        selectBlock(selectedRoot.id, null);
+                      }}
+                      className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-blue-400 border border-zinc-700 transition-colors"
+                      title={t('点击切换聚焦至外层容器', 'Switch focus to parent container')}
                     >
-                      <Plus size={11} />
-                      <span>{t('添加图片', 'Add Photo')}</span>
+                      {t('父级容器 · 切换', 'Parent · Focus')}
                     </button>
-                  </div>
-
-                  {availablePresets.length > 0 && (
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {availablePresets.map((preset) => {
-                        const isCur = effectivePreset === preset.id;
-                        return (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => {
-                              if (!effectiveRootBlock) return;
-                              let targetCols: 1 | 2 | 3 | 4 = 3;
-                              let fitMargin = false;
-                              if (preset.id === '1_col') targetCols = 1;
-                              else if (preset.id === '2_cols' || preset.id === '2x2' || preset.id === '2x3' || preset.id === '2_plus_1' || preset.id === '2_plus_3') targetCols = 2;
-                              else if (preset.id === '3_cols' || preset.id === '3x2' || preset.id === '3_plus_1' || preset.id === '3_plus_2') targetCols = 3;
-                              else if (preset.id === '4_cols' || preset.id === '4_plus_2' || preset.id === '4_plus_1') targetCols = 4;
-                              if (preset.rows.length > 1 && preset.rows[preset.rows.length - 1] < preset.rows[0]) {
-                                fitMargin = true;
-                              }
-                              updateContentBlock(effectiveRootBlock.id, b.id, (prev) => ({
-                                ...prev,
-                                layoutPreset: preset.id,
-                                gridColumns: targetCols,
-                                fitLastToMargin: fitMargin,
-                                showImages: true,
-                              } as DatedEventBlock));
-                            }}
-                            className={`p-1.5 rounded-md border text-left flex flex-col justify-between transition-all duration-150 active:scale-95 hover:scale-[1.02] ${
-                              isCur
-                                ? 'bg-blue-950/70 border-blue-500 shadow-md ring-1 ring-blue-500/50 text-white'
-                                : 'bg-zinc-900 border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800/80 text-zinc-300'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between w-full mb-1">
-                              <span className="font-bold text-[10.5px] truncate">{t(preset.labelZh, preset.labelEn)}</span>
-                              {preset.isRecommended && (
-                                <span className="text-[8px] bg-blue-500/20 text-blue-300 px-1 py-0.2 rounded border border-blue-500/30">
-                                  {t('推荐', 'Fit')}
-                                </span>
-                              )}
-                            </div>
-                            <div className="w-full bg-zinc-950 p-1 rounded border border-zinc-800/80 space-y-0.5">
-                              {preset.rows.map((rowCols, rIdx) => (
-                                <div key={rIdx} className="flex gap-0.5 w-full">
-                                  {Array.from({ length: rowCols }).map((_, cIdx) => (
-                                    <div
-                                      key={cIdx}
-                                      className={`h-1.5 rounded-xs flex-1 ${isCur ? 'bg-blue-400' : 'bg-zinc-600'}`}
-                                    />
-                                  ))}
-                                </div>
-                              ))}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
                   )}
-                </div>
-              );
-            })()}
-
-            {/* Batch Sync Toolbar (Applies frame settings to all frames) */}
-            <div className="bg-zinc-950/90 p-2 rounded-lg border border-zinc-800 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-zinc-200 select-none">
-                  <input
-                    type="checkbox"
-                    checked={syncAllFramesInBlock}
-                    onChange={(e) => setSyncAllFramesInBlock(e.target.checked)}
-                    className="rounded accent-blue-500"
-                  />
-                  <span>{t('同步修改本组所有画框', 'Sync style to all photos in block')}</span>
-                </label>
-              </div>
-              <div className="flex items-center gap-1 pt-1 border-t border-zinc-800/80 text-[10px]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    applyFrameSettingsToGroup(selectedImageSlot.id, 'block', selectedImageSlot);
-                  }}
-                  className="flex-1 py-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 text-blue-300 hover:text-blue-200 border border-zinc-700/80 rounded font-medium transition text-center"
-                  title={t('应用当前选中的画框风格与比例到本模块所有图片', 'Apply frame style to all images in block')}
-                >
-                  {t('应用到本模块所有画框', 'Apply to Block')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    applyFrameSettingsToGroup(selectedImageSlot.id, 'container', selectedImageSlot);
-                  }}
-                  className="flex-1 py-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700/80 rounded font-medium transition text-center"
-                  title={t('应用当前选中的画框风格与比例到本容器所有图片', 'Apply frame style to all images in container')}
-                >
-                  {t('应用到本容器', 'To Container')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    applyFrameSettingsToGroup(selectedImageSlot.id, 'doc', selectedImageSlot);
-                  }}
-                  className="py-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700/80 rounded font-medium transition text-center"
-                  title={t('应用当前选中的画框风格与比例到全简报所有图片', 'Apply frame style to all images in bulletin')}
-                >
-                  {t('全简报', 'All')}
-                </button>
-              </div>
-            </div>
-
-            {/* 3 Tab Switcher */}
-            <div className="grid grid-cols-3 gap-1 bg-zinc-950 p-1 rounded-md border border-zinc-800 text-[11px] font-bold">
-              <button
-                type="button"
-                onClick={() => setImageSlotTab('size')}
-                className={`py-1 rounded text-center transition-colors ${
-                  imageSlotTab === 'size'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                {t('尺寸比例', 'Size & Ratio')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setImageSlotTab('frame')}
-                className={`py-1 rounded text-center transition-colors ${
-                  imageSlotTab === 'frame'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                {t('画框预设', 'Frame Style')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setImageSlotTab('crop')}
-                className={`py-1 rounded text-center transition-colors ${
-                  imageSlotTab === 'crop'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                {t('画面调节', 'Crop & Pan')}
-              </button>
-            </div>
-
-            {/* TAB 1: SIZE & RATIO */}
-            {imageSlotTab === 'size' && (
-              <div className="space-y-3">
-                {/* Upload & Clear Actions */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleUploadForSelectedSlot}
-                  className="hidden"
-                />
-                <div className="flex gap-1.5">
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex-1 py-1.5 px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                    onClick={() => toggleTool('container')}
+                    className="p-1 rounded text-zinc-400 hover:text-white transition-colors"
+                    title={isCollapsed ? t('展开容器工具', 'Expand') : t('折叠容器工具', 'Collapse')}
                   >
-                    <Upload size={12} />
-                    <span>
-                      {selectedImageSlot.url
-                        ? t('更换图片', 'Replace Photo')
-                        : t('上传图片', 'Upload Photo')}
-                    </span>
+                    {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                   </button>
-                  {selectedImageSlot.url && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateImageSlotById(selectedImageSlot.id, {
-                          url: null,
-                          zoom: 1,
-                          focalPoint: { x: 50, y: 50 },
-                        })
-                      }
-                      className="px-2.5 py-1.5 bg-zinc-900 hover:bg-red-950/60 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-xs transition-colors"
-                    >
-                      {t('清除', 'Clear')}
-                    </button>
-                  )}
-                </div>
-
-                {/* Aspect Ratio */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] font-semibold text-zinc-400">
-                      {t('画幅比例', 'Aspect Ratio')}
-                    </label>
-                    {syncAllFramesInBlock && (
-                      <span className="text-[9px] text-blue-400 font-medium">
-                        {t('同步应用于本组', 'Syncing to block')}
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-6 gap-0.5 bg-zinc-950 p-0.5 rounded border border-zinc-800">
-                    {ASPECT_RATIOS.map((ratio) => (
-                      <button
-                        key={ratio}
-                        type="button"
-                        onClick={() => {
-                          if (ratio === 'free') {
-                            updateSelectedSlotWithSync({
-                              aspectRatio: 'free',
-                              frameWidthMode: 'custom_px',
-                              frameCustomWidthPx:
-                                selectedImageSlot.frameCustomWidthPx || 320,
-                            });
-                          } else {
-                            updateSelectedSlotWithSync({
-                              aspectRatio: ratio,
-                              frameHeightMode: 'aspect',
-                            });
-                          }
-                        }}
-                        className={`py-1 rounded text-[10px] font-bold transition-colors ${
-                          selectedImageSlot.aspectRatio === ratio
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'text-zinc-400 hover:text-zinc-200'
-                        }`}
-                      >
-                        {ratio === 'free' ? t('自由', 'Free') : ratio}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Picture Frame Size & Alignment */}
-                <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-zinc-200">
-                      {t('画框尺寸与对齐', 'Frame Size & Alignment')}
-                    </span>
-                    {((selectedImageSlot.frameWidthMode && selectedImageSlot.frameWidthMode !== 'full') ||
-                      selectedImageSlot.frameHeightMode === 'custom_px' ||
-                      (selectedImageSlot.frameAlign && selectedImageSlot.frameAlign !== 'center')) && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateSelectedSlotWithSync({
-                            frameWidthMode: 'full',
-                            frameHeightMode: 'aspect',
-                            frameAlign: 'center',
-                            frameCustomWidthPx: undefined,
-                            frameCustomHeightPx: undefined,
-                          })
-                        }
-                        className="flex items-center gap-1 text-[9px] text-amber-300 hover:text-amber-200 font-semibold"
-                      >
-                        <RotateCcw size={9} />
-                        <span>{t('重置尺寸', 'Reset')}</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Frame Width Modes */}
-                  <div>
-                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                      {t('画框宽度', 'Frame Width')}
-                    </label>
-                    <div className="grid grid-cols-4 gap-0.5 bg-zinc-950 p-0.5 rounded border border-zinc-800">
-                      {(
-                        [
-                          { mode: 'full', label: '100%' },
-                          { mode: '75%', label: '75%' },
-                          { mode: '50%', label: '50%' },
-                          { mode: 'custom_px', label: t('自定', 'Custom') },
-                        ] as const
-                      ).map((item) => {
-                        const isSelectedMode =
-                          (selectedImageSlot.frameWidthMode || 'full') === item.mode;
-                        return (
-                          <button
-                            key={item.mode}
-                            type="button"
-                            onClick={() => {
-                              if (item.mode === 'custom_px') {
-                                updateSelectedSlotWithSync({
-                                  frameWidthMode: 'custom_px',
-                                  frameCustomWidthPx:
-                                    selectedImageSlot.frameCustomWidthPx || 320,
-                                  aspectRatio: 'free',
-                                });
-                              } else {
-                                updateSelectedSlotWithSync({
-                                  frameWidthMode: item.mode,
-                                  frameCustomWidthPx: selectedImageSlot.frameCustomWidthPx,
-                                });
-                              }
-                            }}
-                            className={`py-1 rounded text-[10px] font-bold transition-colors ${
-                              isSelectedMode
-                                ? 'bg-blue-600 text-white shadow-sm'
-                                : 'text-zinc-400 hover:text-zinc-200'
-                            }`}
-                          >
-                            {item.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {selectedImageSlot.frameWidthMode === 'custom_px' && (
-                      <div className="mt-2 flex items-center gap-2 bg-zinc-950 p-1.5 rounded border border-zinc-800 text-xs">
-                        <span className="text-[10px] text-zinc-400 shrink-0">W:</span>
-                        <input
-                          type="range"
-                          min={80}
-                          max={800}
-                          step={10}
-                          value={selectedImageSlot.frameCustomWidthPx || 320}
-                          onChange={(e) =>
-                            updateSelectedSlotWithSync({
-                              frameWidthMode: 'custom_px',
-                              frameCustomWidthPx: Number(e.target.value),
-                              aspectRatio: 'free',
-                            })
-                          }
-                          className="flex-1 h-1.5 bg-zinc-800 rounded accent-blue-500 cursor-pointer"
-                        />
-                        <span className="font-mono text-[10px] text-zinc-200 min-w-[40px] text-right">
-                          {selectedImageSlot.frameCustomWidthPx || 320}px
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Frame Height Mode */}
-                  <div>
-                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                      {t('画框高度', 'Frame Height')}
-                    </label>
-                    <div className="grid grid-cols-2 gap-0.5 bg-zinc-950 p-0.5 rounded border border-zinc-800">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateSelectedSlotWithSync({
-                            frameHeightMode: 'aspect',
-                          })
-                        }
-                        className={`py-1 rounded text-[10px] font-bold transition-colors ${
-                          (selectedImageSlot.frameHeightMode || 'aspect') === 'aspect'
-                            ? 'bg-blue-600 text-white'
-                            : 'text-zinc-400 hover:text-zinc-200'
-                        }`}
-                      >
-                        {t('画幅比例联动', 'By Ratio')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateSelectedSlotWithSync({
-                            frameHeightMode: 'custom_px',
-                            frameCustomHeightPx: selectedImageSlot.frameCustomHeightPx || 200,
-                            aspectRatio: 'free',
-                          })
-                        }
-                        className={`py-1 rounded text-[10px] font-bold transition-colors ${
-                          selectedImageSlot.frameHeightMode === 'custom_px'
-                            ? 'bg-blue-600 text-white'
-                            : 'text-zinc-400 hover:text-zinc-200'
-                        }`}
-                      >
-                        {t('固定像素高度', 'Fixed (px)')}
-                      </button>
-                    </div>
-
-                    {selectedImageSlot.frameHeightMode === 'custom_px' && (
-                      <div className="mt-2 flex items-center gap-2 bg-zinc-950 p-1.5 rounded border border-zinc-800 text-xs">
-                        <span className="text-[10px] text-zinc-400 shrink-0">H:</span>
-                        <input
-                          type="range"
-                          min={60}
-                          max={600}
-                          step={10}
-                          value={selectedImageSlot.frameCustomHeightPx || 200}
-                          onChange={(e) =>
-                            updateSelectedSlotWithSync({
-                              frameHeightMode: 'custom_px',
-                              frameCustomHeightPx: Number(e.target.value),
-                              aspectRatio: 'free',
-                            })
-                          }
-                          className="flex-1 h-1.5 bg-zinc-800 rounded accent-blue-500 cursor-pointer"
-                        />
-                        <span className="font-mono text-[10px] text-zinc-200 min-w-[40px] text-right">
-                          {selectedImageSlot.frameCustomHeightPx || 200}px
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Frame Alignment */}
-                  <div>
-                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                      {t('画框对齐方式', 'Alignment')}
-                    </label>
-                    <div className="grid grid-cols-3 gap-1">
-                      {(
-                        [
-                          { align: 'left', icon: AlignLeft, label: t('居左', 'Left') },
-                          { align: 'center', icon: AlignCenter, label: t('居中', 'Center') },
-                          { align: 'right', icon: AlignRight, label: t('居右', 'Right') },
-                        ] as const
-                      ).map((item) => {
-                        const isSelectedAlign =
-                          (selectedImageSlot.frameAlign || 'center') === item.align;
-                        const IconComp = item.icon;
-                        return (
-                          <button
-                            key={item.align}
-                            type="button"
-                            onClick={() =>
-                              updateImageSlotById(selectedImageSlot.id, {
-                                frameAlign: item.align,
-                              })
-                            }
-                            className={`py-1 flex items-center justify-center gap-1 rounded text-[10px] font-bold border transition-colors ${
-                              isSelectedAlign
-                                ? 'bg-blue-600 border-blue-400 text-white'
-                                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                            }`}
-                          >
-                            <IconComp size={11} />
-                            <span>{item.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
                 </div>
               </div>
-            )}
 
-            {/* TAB 2: FRAME PRESETS & STYLING */}
-            {imageSlotTab === 'frame' && (
-              <div className="space-y-3">
-                {/* Quick Frame Presets */}
+              {!isCollapsed && (
+                <div className="space-y-3">
+                  {selectedRoot.type === 'section_container' ? (
+            <div className="space-y-3">
+              {/* 3-Tab Switcher inside Container Inspector */}
+            <div className="grid grid-cols-3 bg-zinc-950 p-0.5 rounded-md border border-zinc-800 text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setContainerTab('style')}
+                className={`py-1 rounded transition-colors ${
+                  containerTab === 'style'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {t('外观配色', 'Style')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setContainerTab('icons')}
+                className={`py-1 rounded transition-colors ${
+                  containerTab === 'icons'
+                    ? 'bg-zinc-800 text-amber-300 shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {t('徽章与符号', 'Icons')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setContainerTab('bg')}
+                className={`py-1 rounded transition-colors ${
+                  containerTab === 'bg'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {t('底纹与边框', 'Background')}
+              </button>
+            </div>
+
+            {/* TAB 1: STYLE & STRUCTURE */}
+            {containerTab === 'style' && (
+              <div className="space-y-3 pt-0.5">
+                {/* Structure Toggles */}
+                <div className="bg-zinc-900/90 border border-zinc-700/70 rounded p-2 grid grid-cols-3 gap-1.5 text-[11px] text-zinc-200">
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedRoot.showHeader !== false}
+                      onChange={(e) =>
+                        updateRootBlock(selectedRoot.id, (prev) => ({
+                          ...prev,
+                          showHeader: e.target.checked,
+                        } as SectionContainerBlock))
+                      }
+                      className="rounded accent-blue-500"
+                    />
+                    <span>{t('标题栏', 'Header')}</span>
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedRoot.showBadge !== false}
+                      onChange={(e) =>
+                        updateRootBlock(selectedRoot.id, (prev) => ({
+                          ...prev,
+                          showBadge: e.target.checked,
+                        } as SectionContainerBlock))
+                      }
+                      className="rounded accent-blue-500"
+                    />
+                    <span>{t('编号框', 'Badge')}</span>
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedRoot.bordered !== false}
+                      onChange={(e) =>
+                        updateRootBlock(selectedRoot.id, (prev) => ({
+                          ...prev,
+                          bordered: e.target.checked,
+                        } as SectionContainerBlock))
+                      }
+                      className="rounded accent-blue-500"
+                    />
+                    <span>{t('外边框', 'Border')}</span>
+                  </label>
+                </div>
+
+                {/* Theme Presets */}
                 <div>
                   <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                    {t('画框预设风格', 'Frame Presets')}
+                    {t('预设配色', 'Theme Preset')}
                   </label>
-                  <div className="grid grid-cols-3 gap-1">
-                    {(
-                      [
-                        {
-                          zh: '无框',
-                          en: 'None',
-                          patch: {
-                            frameRadius: 4,
-                            frameBorderWidth: 0,
-                            frameMatPadding: 0,
-                            frameShadow: 'none' as const,
-                          },
-                        },
-                        {
-                          zh: '圆角',
-                          en: 'Rounded',
-                          patch: {
-                            frameRadius: 12,
-                            frameBorderWidth: 0,
-                            frameMatPadding: 0,
-                            frameShadow: 'sm' as const,
-                          },
-                        },
-                        {
-                          zh: '拍立得',
-                          en: 'Polaroid',
-                          patch: {
-                            frameRadius: 8,
-                            frameBorderWidth: 1,
-                            frameBorderColor: '#d4d4d8',
-                            frameBorderStyle: 'solid' as const,
-                            frameMatPadding: 6,
-                            frameMatColor: '#ffffff',
-                            frameShadow: 'md' as const,
-                          },
-                        },
-                        {
-                          zh: '邮票虚线',
-                          en: 'Stamp',
-                          patch: {
-                            frameRadius: 6,
-                            frameBorderWidth: 2,
-                            frameBorderColor: '#71717a',
-                            frameBorderStyle: 'dashed' as const,
-                            frameMatPadding: 5,
-                            frameMatColor: '#fafafa',
-                            frameShadow: 'sm' as const,
-                          },
-                        },
-                        {
-                          zh: '古典双线',
-                          en: 'Double',
-                          patch: {
-                            frameRadius: 4,
-                            frameBorderWidth: 4,
-                            frameBorderColor: '#52525b',
-                            frameBorderStyle: 'double' as const,
-                            frameMatPadding: 4,
-                            frameMatColor: '#ffffff',
-                            frameShadow: 'none' as const,
-                          },
-                        },
-                        {
-                          zh: '正圆画框',
-                          en: 'Circle',
-                          patch: {
-                            frameRadius: 999,
-                            frameBorderWidth: 3,
-                            frameBorderColor: '#ffffff',
-                            frameBorderStyle: 'solid' as const,
-                            frameMatPadding: 0,
-                            frameShadow: 'md' as const,
-                          },
-                        },
-                      ]
-                    ).map((preset) => (
-                      <button
-                        key={preset.en}
-                        type="button"
-                        onClick={() =>
-                          updateSelectedSlotWithSync(preset.patch)
-                        }
-                        className="py-1 px-1.5 rounded text-[10px] font-semibold bg-zinc-950 hover:bg-zinc-700 text-zinc-200 border border-zinc-800 transition-colors"
-                      >
-                        {t(preset.zh, preset.en)}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-2 gap-1">
+                    {Object.values(SECTION_THEMES).map((themePreset) => {
+                      const isCurrent = selectedRoot.theme.id === themePreset.id;
+                      return (
+                        <button
+                          key={themePreset.id}
+                          type="button"
+                          onClick={() =>
+                            updateRootBlock(selectedRoot.id, (prev) => ({
+                              ...prev,
+                              theme: { ...themePreset },
+                            } as SectionContainerBlock))
+                          }
+                          className={`px-2 py-1.5 rounded border text-left flex items-center gap-1.5 text-[11px] transition-all ${
+                            isCurrent
+                              ? 'bg-zinc-800 border-white text-white font-semibold'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          <span
+                            className="w-3.5 h-3.5 rounded-sm border border-white/20 shrink-0"
+                            style={{ backgroundColor: themePreset.primaryColor }}
+                          />
+                          <span className="truncate">
+                            {themePreset.name.split(' ')[0]}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Collapsible Details */}
-                <div className="border border-zinc-700/60 rounded-md bg-zinc-950/40 p-2 space-y-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsFrameDetailsOpen(!isFrameDetailsOpen)}
-                    className="w-full flex items-center justify-between text-[11px] font-semibold text-zinc-300 hover:text-white transition-colors"
-                  >
-                    <span>{t('自定义细节调节 (圆角/边框/阴影)', 'Custom Radius, Border & Shadow')}</span>
-                    <span className="text-[10px] text-zinc-500 font-normal">
-                      {isFrameDetailsOpen ? '▾' : '▸'}
-                    </span>
-                  </button>
+                {/* Custom Color Pickers */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('主色调', 'Accent Color')}
+                    </label>
+                    <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded px-2 py-1">
+                      <input
+                        type="color"
+                        value={selectedRoot.theme.primaryColor}
+                        onChange={(e) =>
+                          updateRootBlock(selectedRoot.id, (prev) => {
+                            const sec = prev as SectionContainerBlock;
+                            return {
+                              ...sec,
+                              theme: {
+                                ...sec.theme,
+                                id: 'custom',
+                                primaryColor: e.target.value,
+                              },
+                            };
+                          })
+                        }
+                        className="w-4 h-4 bg-transparent border-0 cursor-pointer"
+                      />
+                      <span className="text-[10px] font-mono text-zinc-300">
+                        {selectedRoot.theme.primaryColor}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('容器底色', 'Background')}
+                    </label>
+                    <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded px-2 py-1">
+                      <input
+                        type="color"
+                        value={selectedRoot.theme.containerBg}
+                        onChange={(e) =>
+                          updateRootBlock(selectedRoot.id, (prev) => {
+                            const sec = prev as SectionContainerBlock;
+                            return {
+                              ...sec,
+                              theme: {
+                                ...sec.theme,
+                                id: 'custom',
+                                containerBg: e.target.value,
+                              },
+                            };
+                          })
+                        }
+                        className="w-4 h-4 bg-transparent border-0 cursor-pointer"
+                      />
+                      <span className="text-[10px] font-mono text-zinc-300">
+                        {selectedRoot.theme.containerBg}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-                  {isFrameDetailsOpen && (
-                    <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
-                      {/* Radius & Mat Padding */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                            {t('圆角', 'Radius')}
-                          </label>
-                          <div className="grid grid-cols-5 gap-0.5">
-                            {[0, 6, 12, 20, 999].map((r) => (
-                              <button
-                                key={r}
-                                type="button"
-                                onClick={() =>
-                                  updateSelectedSlotWithSync({
-                                    frameRadius: r,
-                                  })
-                                }
-                                className={`py-1 rounded text-[10px] font-bold border ${
-                                  (selectedImageSlot.frameRadius ?? 4) === r
-                                    ? 'bg-zinc-100 text-zinc-900 border-white'
-                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                                }`}
-                              >
-                                {r === 999 ? '●' : r}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                            {t('白边留白', 'Mat Pad')}
-                          </label>
-                          <div className="grid grid-cols-4 gap-0.5">
-                            {[0, 4, 8, 12].map((mp) => (
-                              <button
-                                key={mp}
-                                type="button"
-                                onClick={() =>
-                                  updateSelectedSlotWithSync({
-                                    frameMatPadding: mp,
-                                  })
-                                }
-                                className={`py-1 rounded text-[10px] font-bold border ${
-                                  (selectedImageSlot.frameMatPadding ?? 0) === mp
-                                    ? 'bg-zinc-100 text-zinc-900 border-white'
-                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                                }`}
-                              >
-                                {mp}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                {/* Padding & Radius */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-semibold text-zinc-400">
+                        {t('内边距', 'Padding')}
+                      </label>
+                      <span className="text-[9px] font-mono text-zinc-500">
+                        {typeof selectedRoot.customPadding === 'number'
+                          ? selectedRoot.customPadding
+                          : selectedRoot.padding === 'none'
+                          ? 0
+                          : selectedRoot.padding === 'sm'
+                          ? 10
+                          : selectedRoot.padding === 'lg'
+                          ? 18
+                          : 14}px
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1">
+                      {(['none', 'sm', 'md', 'lg'] as const).map((pad) => {
+                        const valMap = { none: 0, sm: 10, md: 14, lg: 18 };
+                        const curVal =
+                          typeof selectedRoot.customPadding === 'number'
+                            ? selectedRoot.customPadding
+                            : (valMap as any)[(selectedRoot as SectionContainerBlock).padding || 'md'];
+                        const isActive =
+                          selectedRoot.customPadding === undefined
+                            ? selectedRoot.padding === pad
+                            : curVal === valMap[pad];
+
+                        return (
+                          <button
+                            key={pad}
+                            type="button"
+                            onClick={() =>
+                              updateRootBlock(selectedRoot.id, (prev) => ({
+                                ...prev,
+                                padding: pad,
+                                customPadding: valMap[pad],
+                              } as SectionContainerBlock))
+                            }
+                            className={`py-1 rounded text-[10px] font-bold border transition-colors ${
+                              isActive
+                                ? 'bg-zinc-100 text-zinc-900 border-white'
+                                : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                            }`}
+                          >
+                            {pad === 'none' ? '0' : pad.toUpperCase()}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-1 flex items-center gap-1 bg-zinc-950 border border-zinc-800 rounded px-1.5 py-0.5 focus-within:border-zinc-500 transition-colors">
+                      <span className="text-[9px] text-zinc-500 font-medium">
+                        {t('手动', 'Val')}
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={160}
+                        value={
+                          typeof selectedRoot.customPadding === 'number'
+                            ? selectedRoot.customPadding
+                            : selectedRoot.padding === 'none'
+                            ? 0
+                            : selectedRoot.padding === 'sm'
+                            ? 10
+                            : selectedRoot.padding === 'lg'
+                            ? 18
+                            : 14
+                        }
+                        onChange={(e) => {
+                          const val = Math.max(0, parseInt(e.target.value) || 0);
+                          updateRootBlock(selectedRoot.id, (prev) => ({
+                            ...prev,
+                            customPadding: val,
+                          } as SectionContainerBlock));
+                        }}
+                        className="w-full bg-transparent text-right text-[10px] font-mono font-bold text-zinc-200 outline-none"
+                      />
+                      <span className="text-[9px] font-mono text-zinc-500">px</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-semibold text-zinc-400">
+                        {t('圆角', 'Radius')}
+                      </label>
+                      <span className="text-[9px] font-mono text-zinc-500">
+                        {selectedRoot.borderRadius ?? 0}px
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {[0, 10, 16].map((rad) => (
+                        <button
+                          key={rad}
+                          type="button"
+                          onClick={() =>
+                            updateRootBlock(selectedRoot.id, (prev) => ({
+                              ...prev,
+                              borderRadius: rad,
+                            } as SectionContainerBlock))
+                          }
+                          className={`py-1 rounded text-[10px] font-bold border transition-colors ${
+                            selectedRoot.borderRadius === rad
+                              ? 'bg-zinc-100 text-zinc-900 border-white'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          {rad}px
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-1 flex items-center gap-1 bg-zinc-950 border border-zinc-800 rounded px-1.5 py-0.5 focus-within:border-zinc-500 transition-colors">
+                      <span className="text-[9px] text-zinc-500 font-medium">
+                        {t('手动', 'Val')}
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={160}
+                        value={selectedRoot.borderRadius ?? 0}
+                        onChange={(e) => {
+                          const val = Math.max(0, parseInt(e.target.value) || 0);
+                          updateRootBlock(selectedRoot.id, (prev) => ({
+                            ...prev,
+                            borderRadius: val,
+                          } as SectionContainerBlock));
+                        }}
+                        className="w-full bg-transparent text-right text-[10px] font-mono font-bold text-zinc-200 outline-none"
+                      />
+                      <span className="text-[9px] font-mono text-zinc-500">px</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: BADGE [1] & BULLET ■ ICONS */}
+            {containerTab === 'icons' && (
+              <div className="space-y-3 pt-0.5">
+                {/* 1. Section Number Badge [1] */}
+                <div className="bg-zinc-900/90 border border-zinc-700/70 rounded p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-zinc-200">
+                      {t('章节编号 [1] 样式', 'Section Badge [1]')}
+                    </span>
+                    <span className="text-[10px] font-mono text-zinc-400">
+                      {selectedRoot.badgeSize || 26}px
+                    </span>
+                  </div>
+
+                  {/* Editable Number Text + Number Color Row */}
+                  <div className="flex items-center gap-2 bg-zinc-950/90 border border-zinc-800 rounded px-2 py-1.5">
+                    <span className="text-[10px] font-semibold text-zinc-400 shrink-0">
+                      {t('编号数字', 'Number')}
+                    </span>
+                    <input
+                      type="text"
+                      value={selectedRoot.sectionNumber}
+                      placeholder="1"
+                      onChange={(e) =>
+                        updateRootBlock(selectedRoot.id, (prev) => ({
+                          ...prev,
+                          sectionNumber: e.target.value,
+                        } as SectionContainerBlock))
+                      }
+                      className="w-14 bg-zinc-900 border border-zinc-700 rounded px-1.5 py-0.5 text-xs font-bold text-white text-center focus:outline-none focus:border-blue-500"
+                    />
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <span className="text-[10px] text-zinc-400">
+                        {t('数字颜色', 'Text Color')}
+                      </span>
+                      <input
+                        type="color"
+                        value={
+                          selectedRoot.badgeTextColor ||
+                          selectedRoot.theme.headerTextColor ||
+                          '#ffffff'
+                        }
+                        onChange={(e) =>
+                          updateRootBlock(selectedRoot.id, (prev) => ({
+                            ...prev,
+                            badgeTextColor: e.target.value,
+                          } as SectionContainerBlock))
+                        }
+                        className="w-4 h-4 bg-transparent border-0 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1">
+                    {(
+                      [
+                        { id: 'rounded_square', zh: '圆角方', en: 'Square' },
+                        { id: 'flower', zh: '花瓣章', en: 'Flower' },
+                        { id: 'circle', zh: '圆形', en: 'Circle' },
+                        { id: 'hexagon', zh: '六边形', en: 'Hex' },
+                        { id: 'diamond', zh: '菱形', en: 'Diamond' },
+                        { id: 'pill', zh: '胶囊', en: 'Pill' },
+                        { id: 'outline', zh: '线框', en: 'Outline' },
+                        { id: 'custom_only', zh: '自定义底', en: 'Custom' },
+                      ] as { id: BadgeShapeType; zh: string; en: string }[]
+                    ).map((sh) => {
+                      const isActive = selectedRoot.badgeCustomUrl
+                        ? sh.id === 'custom_only'
+                        : (selectedRoot.badgeShape || 'rounded_square') === sh.id;
+                      return (
+                        <button
+                          key={sh.id}
+                          type="button"
+                          onClick={() => {
+                            if (sh.id === 'custom_only' && !selectedRoot.badgeCustomUrl) {
+                              sectionBadgeAssetInputRef.current?.click();
+                            }
+                            updateRootBlock(selectedRoot.id, (prev) => ({
+                              ...prev,
+                              badgeShape: sh.id,
+                              badgeCustomUrl:
+                                sh.id === 'custom_only'
+                                  ? (prev as SectionContainerBlock).badgeCustomUrl
+                                  : null,
+                            } as SectionContainerBlock));
+                          }}
+                          className={`py-1 rounded text-[10px] font-semibold border ${
+                            isActive
+                              ? 'bg-zinc-100 text-zinc-900 border-white'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          {t(sh.zh, sh.en)}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Size + Upload Row */}
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <RangeSliderWithDefault
+                      min={20}
+                      max={38}
+                      step={1}
+                      value={selectedRoot.badgeSize || 26}
+                      defaultValue={26}
+                      unit="px"
+                      lang={lang}
+                      onChange={(val) =>
+                        updateRootBlock(selectedRoot.id, (prev) => ({
+                          ...prev,
+                          badgeSize: Math.round(val),
+                        } as SectionContainerBlock))
+                      }
+                    />
+                    <input
+                      ref={sectionBadgeAssetInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadSectionBadgeAsset}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => sectionBadgeAssetInputRef.current?.click()}
+                      className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 rounded text-[10px] font-semibold flex items-center gap-1 shrink-0"
+                    >
+                      <Upload size={10} />
+                      <span>
+                        {selectedRoot.badgeCustomUrl
+                          ? t('换底图', 'Change')
+                          : t('上传底图', 'Upload')}
+                      </span>
+                    </button>
+                    {selectedRoot.badgeCustomUrl && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateRootBlock(selectedRoot.id, (prev) => ({
+                            ...prev,
+                            badgeCustomUrl: null,
+                            badgeAssetScale: 1,
+                            badgeAssetX: 0,
+                            badgeAssetY: 0,
+                            badgeShape:
+                              (prev as SectionContainerBlock).badgeShape ===
+                              'custom_only'
+                                ? 'rounded_square'
+                                : (prev as SectionContainerBlock).badgeShape,
+                          } as SectionContainerBlock))
+                        }
+                        className="px-1.5 py-1 bg-zinc-950 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-[10px]"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Custom Badge Asset Size & Position Controls (Behind Number) */}
+                  {selectedRoot.badgeCustomUrl && (
+                    <div className="bg-zinc-950/90 border border-amber-500/30 rounded p-2 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-amber-300">
+                          {t(
+                            '数字后方自定义素材 · 大小与位置',
+                            'Custom Badge Asset · Size & Position'
+                          )}
+                        </span>
+                        {((selectedRoot.badgeAssetScale ?? 1) !== 1 ||
+                          (selectedRoot.badgeAssetX || 0) !== 0 ||
+                          (selectedRoot.badgeAssetY || 0) !== 0) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateRootBlock(selectedRoot.id, (prev) => ({
+                                ...prev,
+                                badgeAssetScale: 1,
+                                badgeAssetX: 0,
+                                badgeAssetY: 0,
+                              } as SectionContainerBlock))
+                            }
+                            className="flex items-center gap-0.5 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
+                          >
+                            <RotateCcw size={9} />
+                            <span>{t('重置', 'Reset')}</span>
+                          </button>
+                        )}
                       </div>
 
-                      {/* Border Width, Color & Shadow */}
+                      <div>
+                        <div className="flex justify-between text-[10px] text-zinc-400">
+                          <span>{t('素材缩放 (Size)', 'Asset Scale')}</span>
+                          <span className="font-mono text-zinc-200">
+                            {Math.round((selectedRoot.badgeAssetScale ?? 1) * 100)}%
+                          </span>
+                        </div>
+                        <RangeSliderWithDefault
+                          min={0.5}
+                          max={2.5}
+                          step={0.05}
+                          value={selectedRoot.badgeAssetScale ?? 1}
+                          defaultValue={1}
+                          unit="x"
+                          lang={lang}
+                          onChange={(val) =>
+                            updateRootBlock(selectedRoot.id, (prev) => ({
+                              ...prev,
+                              badgeAssetScale: val,
+                            } as SectionContainerBlock))
+                          }
+                        />
+                      </div>
+
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                            {t('外框粗细与颜色', 'Border')}
-                          </label>
-                          <div className="flex items-center gap-1">
-                            {[0, 1, 2, 4].map((bw) => (
-                              <button
-                                key={bw}
-                                type="button"
-                                onClick={() =>
-                                  updateSelectedSlotWithSync({
-                                    frameBorderWidth: bw,
-                                  })
-                                }
-                                className={`flex-1 py-1 rounded text-[10px] font-bold border ${
-                                  (selectedImageSlot.frameBorderWidth ?? 0) === bw
-                                    ? 'bg-zinc-100 text-zinc-900 border-white'
-                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                                }`}
-                              >
-                                {bw}
-                              </button>
-                            ))}
-                            <input
-                              type="color"
-                              value={selectedImageSlot.frameBorderColor || '#d4d4d8'}
-                              onChange={(e) =>
-                                updateSelectedSlotWithSync({
-                                  frameBorderColor: e.target.value,
-                                })
-                              }
-                              className="w-5 h-5 bg-transparent border-0 cursor-pointer shrink-0"
-                            />
+                          <div className="flex justify-between text-[10px] text-zinc-400">
+                            <span>{t('左右位置 (X)', 'Position X')}</span>
+                            <span className="font-mono text-zinc-200">
+                              {(selectedRoot.badgeAssetX || 0) > 0
+                                ? `+${selectedRoot.badgeAssetX || 0}px`
+                                : `${selectedRoot.badgeAssetX || 0}px`}
+                            </span>
                           </div>
+                          <RangeSliderWithDefault
+                            min={-30}
+                            max={30}
+                            step={1}
+                            value={selectedRoot.badgeAssetX || 0}
+                            defaultValue={0}
+                            unit="px"
+                            lang={lang}
+                            onChange={(val) =>
+                              updateRootBlock(selectedRoot.id, (prev) => ({
+                                ...prev,
+                                badgeAssetX: Math.round(val),
+                              } as SectionContainerBlock))
+                            }
+                          />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                            {t('阴影效果', 'Shadow')}
-                          </label>
-                          <div className="grid grid-cols-4 gap-1">
-                            {(
-                              [
-                                { id: 'none', zh: '无', en: '0' },
-                                { id: 'sm', zh: '浅', en: 'S' },
-                                { id: 'md', zh: '深', en: 'M' },
-                                { id: 'hard', zh: '立体', en: '3D' },
-                              ] as const
-                            ).map((sh) => (
-                              <button
-                                key={sh.id}
-                                type="button"
-                                onClick={() =>
-                                  updateSelectedSlotWithSync({
-                                    frameShadow: sh.id,
-                                  })
-                                }
-                                className={`py-1 rounded text-[10px] font-semibold border ${
-                                  (selectedImageSlot.frameShadow || 'none') === sh.id
-                                    ? 'bg-zinc-100 text-zinc-900 border-white'
-                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                                }`}
-                              >
-                                {t(sh.zh, sh.en)}
-                              </button>
-                            ))}
+                          <div className="flex justify-between text-[10px] text-zinc-400">
+                            <span>{t('上下位置 (Y)', 'Position Y')}</span>
+                            <span className="font-mono text-zinc-200">
+                              {(selectedRoot.badgeAssetY || 0) > 0
+                                ? `+${selectedRoot.badgeAssetY || 0}px`
+                                : `${selectedRoot.badgeAssetY || 0}px`}
+                            </span>
                           </div>
+                          <RangeSliderWithDefault
+                            min={-30}
+                            max={30}
+                            step={1}
+                            value={selectedRoot.badgeAssetY || 0}
+                            defaultValue={0}
+                            unit="px"
+                            lang={lang}
+                            onChange={(val) =>
+                              updateRootBlock(selectedRoot.id, (prev) => ({
+                                ...prev,
+                                badgeAssetY: Math.round(val),
+                              } as SectionContainerBlock))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Header Divider */}
+                  <div className="pt-1 border-t border-zinc-800">
+                    <label className="block text-[10px] text-zinc-400 mb-1">
+                      {t('标题底部分割线', 'Header Line')}
+                    </label>
+                    <div className="grid grid-cols-5 gap-1">
+                      {(
+                        [
+                          { id: 'solid', zh: '细线', en: 'Solid' },
+                          { id: 'thick_accent', zh: '粗线', en: 'Thick' },
+                          { id: 'dashed', zh: '虚线', en: 'Dash' },
+                          { id: 'double', zh: '双线', en: 'Double' },
+                          { id: 'none', zh: '无', en: 'None' },
+                        ] as const
+                      ).map((dv) => (
+                        <button
+                          key={dv.id}
+                          type="button"
+                          onClick={() =>
+                            updateRootBlock(selectedRoot.id, (prev) => ({
+                              ...prev,
+                              headerDivider: dv.id,
+                            } as SectionContainerBlock))
+                          }
+                          className={`py-1 rounded text-[10px] font-semibold border ${
+                            (selectedRoot.headerDivider || 'solid') === dv.id
+                              ? 'bg-zinc-100 text-zinc-900 border-white'
+                              : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                          }`}
+                        >
+                          {t(dv.zh, dv.en)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Section Bullet Icon (■) */}
+                <div className="bg-zinc-900/90 border border-zinc-700/70 rounded p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-zinc-200">
+                      {t('要点小符号 (■) 样式', 'Bullet Icon (■)')}
+                    </span>
+                    <span className="text-[10px] font-mono text-zinc-400">
+                      {selectedRoot.bulletSize || 8}px
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1">
+                    {(
+                      [
+                        { id: 'square', zh: '■ 方块', en: '■ Box' },
+                        { id: 'circle', zh: '● 圆点', en: '● Dot' },
+                        { id: 'diamond', zh: '◆ 菱形', en: '◆ Gem' },
+                        { id: 'ring', zh: '◎ 圆环', en: '◎ Ring' },
+                        { id: 'bar', zh: '▎ 竖条', en: '▎ Bar' },
+                        { id: 'arrow', zh: '▶ 箭头', en: '▶ Arrow' },
+                        { id: 'star', zh: '★ 星标', en: '★ Star' },
+                        { id: 'custom', zh: '★ 贴图', en: '★ PNG' },
+                      ] as { id: BulletShapeType; zh: string; en: string }[]
+                    ).map((bs) => (
+                      <button
+                        key={bs.id}
+                        type="button"
+                        onClick={() => {
+                          if (bs.id === 'custom' && !selectedRoot.bulletCustomUrl) {
+                            sectionBulletAssetInputRef.current?.click();
+                          }
+                          updateRootBlock(selectedRoot.id, (prev) => ({
+                            ...prev,
+                            bulletShape: bs.id,
+                            bulletCustomUrl:
+                              bs.id === 'custom'
+                                ? (prev as SectionContainerBlock).bulletCustomUrl
+                                : null,
+                          } as SectionContainerBlock));
+                        }}
+                        className={`py-1 rounded text-[10px] font-semibold border ${
+                          (selectedRoot.bulletShape || 'square') === bs.id
+                            ? 'bg-zinc-100 text-zinc-900 border-white'
+                            : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                        }`}
+                      >
+                        {t(bs.zh, bs.en)}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Size + Upload Row */}
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <RangeSliderWithDefault
+                      min={6}
+                      max={14}
+                      step={1}
+                      value={selectedRoot.bulletSize || 8}
+                      defaultValue={8}
+                      unit="px"
+                      lang={lang}
+                      onChange={(val) =>
+                        updateRootBlock(selectedRoot.id, (prev) => ({
+                          ...prev,
+                          bulletSize: Math.round(val),
+                        } as SectionContainerBlock))
+                      }
+                    />
+                    <input
+                      ref={sectionBulletAssetInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadSectionBulletAsset}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => sectionBulletAssetInputRef.current?.click()}
+                      className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 rounded text-[10px] font-semibold flex items-center gap-1 shrink-0"
+                    >
+                      <Upload size={10} />
+                      <span>
+                        {selectedRoot.bulletCustomUrl
+                          ? t('换图标', 'Change')
+                          : t('上传图标', 'Upload')}
+                      </span>
+                    </button>
+                    {selectedRoot.bulletCustomUrl && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateRootBlock(selectedRoot.id, (prev) => ({
+                            ...prev,
+                            bulletCustomUrl: null,
+                            bulletAssetScale: 1,
+                            bulletAssetX: 0,
+                            bulletAssetY: 0,
+                            bulletShape: 'square',
+                          } as SectionContainerBlock))
+                        }
+                        className="px-1.5 py-1 bg-zinc-950 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-[10px]"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Custom Bullet Asset Size & Position Controls */}
+                  {selectedRoot.bulletCustomUrl && (
+                    <div className="bg-zinc-950/90 border border-amber-500/30 rounded p-2 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-amber-300">
+                          {t(
+                            '自定义要点符号 · 大小与位置',
+                            'Custom Bullet Asset · Size & Position'
+                          )}
+                        </span>
+                        {((selectedRoot.bulletAssetScale ?? 1) !== 1 ||
+                          (selectedRoot.bulletAssetX || 0) !== 0 ||
+                          (selectedRoot.bulletAssetY || 0) !== 0) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateRootBlock(selectedRoot.id, (prev) => ({
+                                ...prev,
+                                bulletAssetScale: 1,
+                                bulletAssetX: 0,
+                                bulletAssetY: 0,
+                              } as SectionContainerBlock))
+                            }
+                            className="flex items-center gap-0.5 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
+                          >
+                            <RotateCcw size={9} />
+                            <span>{t('重置', 'Reset')}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between text-[10px] text-zinc-400">
+                          <span>{t('图标缩放 (Size)', 'Icon Scale')}</span>
+                          <span className="font-mono text-zinc-200">
+                            {Math.round((selectedRoot.bulletAssetScale ?? 1) * 100)}%
+                          </span>
+                        </div>
+                        <RangeSliderWithDefault
+                          min={0.5}
+                          max={2.5}
+                          step={0.05}
+                          value={selectedRoot.bulletAssetScale ?? 1}
+                          defaultValue={1}
+                          unit="x"
+                          lang={lang}
+                          onChange={(val) =>
+                            updateRootBlock(selectedRoot.id, (prev) => ({
+                              ...prev,
+                              bulletAssetScale: val,
+                            } as SectionContainerBlock))
+                          }
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="flex justify-between text-[10px] text-zinc-400">
+                            <span>{t('左右微调 (X)', 'Position X')}</span>
+                            <span className="font-mono text-zinc-200">
+                              {(selectedRoot.bulletAssetX || 0) > 0
+                                ? `+${selectedRoot.bulletAssetX || 0}px`
+                                : `${selectedRoot.bulletAssetX || 0}px`}
+                            </span>
+                          </div>
+                          <RangeSliderWithDefault
+                            min={-15}
+                            max={15}
+                            step={1}
+                            value={selectedRoot.bulletAssetX || 0}
+                            defaultValue={0}
+                            unit="px"
+                            lang={lang}
+                            onChange={(val) =>
+                              updateRootBlock(selectedRoot.id, (prev) => ({
+                                ...prev,
+                                bulletAssetX: Math.round(val),
+                              } as SectionContainerBlock))
+                            }
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[10px] text-zinc-400">
+                            <span>{t('上下微调 (Y)', 'Position Y')}</span>
+                            <span className="font-mono text-zinc-200">
+                              {(selectedRoot.bulletAssetY || 0) > 0
+                                ? `+${selectedRoot.bulletAssetY || 0}px`
+                                : `${selectedRoot.bulletAssetY || 0}px`}
+                            </span>
+                          </div>
+                          <RangeSliderWithDefault
+                            min={-15}
+                            max={15}
+                            step={1}
+                            value={selectedRoot.bulletAssetY || 0}
+                            defaultValue={0}
+                            unit="px"
+                            lang={lang}
+                            onChange={(val) =>
+                              updateRootBlock(selectedRoot.id, (prev) => ({
+                                ...prev,
+                                bulletAssetY: Math.round(val),
+                              } as SectionContainerBlock))
+                            }
+                          />
                         </div>
                       </div>
                     </div>
@@ -1906,153 +2111,96 @@ export const RightInspector: React.FC = () => {
               </div>
             )}
 
-            {/* TAB 3: IMAGE CROP & OVERLAY */}
-            {imageSlotTab === 'crop' && (
-              <div className="space-y-3">
-                {/* Arrange Picture Inside Frame (Zoom & Pan) */}
-                <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-zinc-200">
-                      {t('框内画面缩放与移动', 'Arrange Picture in Frame')}
-                    </span>
-                    {(selectedImageSlot.zoom !== 1 ||
-                      selectedImageSlot.focalPoint.x !== 50 ||
-                      selectedImageSlot.focalPoint.y !== 50) && (
+            {/* TAB 3: CONTAINER BACKGROUND, BORDER & STICKER */}
+            {containerTab === 'bg' && (
+              <div className="space-y-3 pt-0.5">
+                {/* Pattern */}
+                <div className="bg-zinc-900/90 border border-zinc-700/70 rounded p-2.5 space-y-2">
+                  <label className="block text-[10px] font-semibold text-zinc-400">
+                    {t('背景纹理', 'Background Pattern')}
+                  </label>
+                  <div className="grid grid-cols-5 gap-1">
+                    {(
+                      [
+                        { id: 'solid', zh: '纯色', en: 'Solid' },
+                        { id: 'gradient', zh: '渐变', en: 'Grad' },
+                        { id: 'dots', zh: '波点', en: 'Dots' },
+                        { id: 'grid', zh: '网格', en: 'Grid' },
+                        { id: 'stripes', zh: '斜纹', en: 'Stripe' },
+                      ] as { id: ContainerPatternType; zh: string; en: string }[]
+                    ).map((pt) => (
                       <button
+                        key={pt.id}
                         type="button"
                         onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            zoom: 1,
-                            focalPoint: { x: 50, y: 50 },
-                          })
+                          updateRootBlock(selectedRoot.id, (prev) => ({
+                            ...prev,
+                            bgPattern: pt.id,
+                          } as SectionContainerBlock))
                         }
-                        className="flex items-center gap-1 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
+                        className={`py-1 rounded text-[10px] font-semibold border ${
+                          (selectedRoot.bgPattern || 'solid') === pt.id
+                            ? 'bg-zinc-100 text-zinc-900 border-white'
+                            : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                        }`}
                       >
-                        <RotateCcw size={10} />
-                        <span>{t('居中复原', 'Reset')}</span>
+                        {t(pt.zh, pt.en)}
                       </button>
-                    )}
+                    ))}
                   </div>
 
-                  {/* Zoom Slider */}
-                  <div>
-                    <div className="flex justify-between text-[10px] text-zinc-400">
-                      <span>{t('画面缩放 (Zoom)', 'Zoom In / Out')}</span>
-                      <span className="font-mono text-zinc-200">
-                        {Math.round(selectedImageSlot.zoom * 100)}%
+                  {selectedRoot.bgPattern === 'gradient' && (
+                    <div className="flex items-center justify-between bg-zinc-950 border border-zinc-700 rounded px-2 py-1">
+                      <span className="text-[10px] text-zinc-300">
+                        {t('渐变结束色', 'Gradient End')}
                       </span>
-                    </div>
-                    <RangeSliderWithDefault
-                      min={0.5}
-                      max={2.5}
-                      step={0.05}
-                      value={selectedImageSlot.zoom}
-                      defaultValue={1}
-                      unit="x"
-                      lang={lang}
-                      onChange={(val) =>
-                        updateImageSlotById(selectedImageSlot.id, { zoom: val })
-                      }
-                    />
-                  </div>
-
-                  {/* Pan X & Pan Y */}
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <div className="flex justify-between text-[10px] text-zinc-400">
-                        <span>{t('左右移动 (X)', 'Move Left/Right')}</span>
-                        <span className="font-mono text-zinc-200">
-                          {selectedImageSlot.focalPoint.x - 50 > 0
-                            ? `+${selectedImageSlot.focalPoint.x - 50}`
-                            : selectedImageSlot.focalPoint.x - 50}
-                        </span>
-                      </div>
-                      <RangeSliderWithDefault
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={selectedImageSlot.focalPoint.x}
-                        defaultValue={50}
-                        unit="%"
-                        lang={lang}
-                        onChange={(val) =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            focalPoint: {
-                              ...selectedImageSlot.focalPoint,
-                              x: Math.round(val),
-                            },
-                          })
+                      <input
+                        type="color"
+                        value={selectedRoot.bgGradientEnd || '#ffffff'}
+                        onChange={(e) =>
+                          updateRootBlock(selectedRoot.id, (prev) => ({
+                            ...prev,
+                            bgGradientEnd: e.target.value,
+                          } as SectionContainerBlock))
                         }
+                        className="w-4 h-4 bg-transparent border-0 cursor-pointer"
                       />
                     </div>
-                    <div>
-                      <div className="flex justify-between text-[10px] text-zinc-400">
-                        <span>{t('上下移动 (Y)', 'Move Up/Down')}</span>
-                        <span className="font-mono text-zinc-200">
-                          {selectedImageSlot.focalPoint.y - 50 > 0
-                            ? `+${selectedImageSlot.focalPoint.y - 50}`
-                            : selectedImageSlot.focalPoint.y - 50}
-                        </span>
-                      </div>
-                      <RangeSliderWithDefault
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={selectedImageSlot.focalPoint.y}
-                        defaultValue={50}
-                        unit="%"
-                        lang={lang}
-                        onChange={(val) =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            focalPoint: {
-                              ...selectedImageSlot.focalPoint,
-                              y: Math.round(val),
-                            },
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
+                  )}
 
-                  <div className="text-[10px] text-zinc-500">
-                    {t(
-                      '💡 提示：也可直接在画布上拖拽图片位置',
-                      '💡 Tip: Drag image directly on canvas to pan'
-                    )}
-                  </div>
-                </div>
-
-                {/* Decorative Frame Overlay / Sticker */}
-                <div className="space-y-2 pt-1 border-t border-zinc-700/60">
+                  {/* Custom Background Image */}
                   <input
-                    ref={frameOverlayInputRef}
+                    ref={containerBgInputRef}
                     type="file"
                     accept="image/*"
-                    onChange={handleUploadFrameOverlay}
+                    onChange={handleUploadContainerBg}
                     className="hidden"
                   />
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-1.5 pt-1">
                     <button
                       type="button"
-                      onClick={() => frameOverlayInputRef.current?.click()}
-                      className="flex-1 py-1.5 px-2 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 rounded text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                      onClick={() => containerBgInputRef.current?.click()}
+                      className="flex-1 py-1.5 px-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 rounded text-[11px] font-semibold flex items-center justify-center gap-1"
                     >
                       <Upload size={11} />
                       <span>
-                        {selectedImageSlot.frameOverlayUrl
-                          ? t('更换自定义相框素材', 'Change Frame Asset')
-                          : t('上传相框贴纸素材 (PNG)', 'Upload Frame Sticker')}
+                        {selectedRoot.bgImage?.url
+                          ? t('更换背景图片', 'Change Bg Image')
+                          : t('上传容器背景图', 'Upload Bg Image')}
                       </span>
                     </button>
-                    {selectedImageSlot.frameOverlayUrl && (
+                    {selectedRoot.bgImage?.url && (
                       <button
                         type="button"
                         onClick={() =>
-                          updateImageSlotById(selectedImageSlot.id, {
-                            frameOverlayUrl: null,
-                            frameAssetScale: 1,
-                            frameAssetX: 0,
-                            frameAssetY: 0,
+                          updateRootBlock(selectedRoot.id, (prev) => {
+                            const sec = prev as SectionContainerBlock;
+                            return {
+                              ...sec,
+                              bgImage: sec.bgImage
+                                ? { ...sec.bgImage, url: null }
+                                : undefined,
+                            };
                           })
                         }
                         className="px-2 py-1 bg-zinc-950 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-[11px]"
@@ -2062,108 +2210,459 @@ export const RightInspector: React.FC = () => {
                     )}
                   </div>
 
-                  {selectedImageSlot.frameOverlayUrl && (
-                    <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-amber-300">
-                          {t('相框贴纸图层与位置', 'Frame Layer & Position')}
-                        </span>
-                        {((selectedImageSlot.frameAssetScale ?? 1) !== 1 ||
-                          (selectedImageSlot.frameAssetX || 0) !== 0 ||
-                          (selectedImageSlot.frameAssetY || 0) !== 0) && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateImageSlotById(selectedImageSlot.id, {
-                                frameAssetScale: 1,
-                                frameAssetX: 0,
-                                frameAssetY: 0,
-                              })
-                            }
-                            className="flex items-center gap-1 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
-                          >
-                            <RotateCcw size={10} />
-                            <span>{t('重置', 'Reset')}</span>
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Layer Toggle */}
-                      <div className="grid grid-cols-3 gap-1">
+                  {selectedRoot.bgImage?.url && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="grid grid-cols-4 gap-1">
                         {(
                           [
-                            { id: 'behind', zh: '画框后方', en: 'Behind' },
-                            { id: 'mask', zh: '形状遮罩', en: 'Mask' },
-                            { id: 'front', zh: '画面前方', en: 'In Front' },
+                            { id: 'cover', zh: '铺满', en: 'Cover' },
+                            { id: 'top_banner', zh: '顶图', en: 'Top' },
+                            { id: 'repeat', zh: '平铺', en: 'Tile' },
+                            { id: 'contain', zh: '居中', en: 'Fit' },
                           ] as const
-                        ).map((lyr) => (
+                        ).map((fit) => (
                           <button
-                            key={lyr.id}
+                            key={fit.id}
                             type="button"
                             onClick={() =>
-                              updateImageSlotById(selectedImageSlot.id, {
-                                frameAssetLayer: lyr.id,
-                              })
+                              updateRootBlock(selectedRoot.id, (prev) => ({
+                                ...prev,
+                                bgImageFit: fit.id,
+                              } as SectionContainerBlock))
                             }
                             className={`py-1 rounded text-[10px] font-semibold border ${
-                              (selectedImageSlot.frameAssetLayer || 'behind') === lyr.id
-                                ? 'bg-blue-600 border-blue-400 text-white'
-                                : 'bg-zinc-950 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                              (selectedRoot.bgImageFit || 'cover') === fit.id
+                                ? 'bg-zinc-100 text-zinc-900 border-white'
+                                : 'bg-zinc-900 text-zinc-400 border-zinc-700'
                             }`}
                           >
-                            {t(lyr.zh, lyr.en)}
+                            {t(fit.zh, fit.en)}
                           </button>
                         ))}
                       </div>
-
-                      {/* Scale */}
-                      <div>
-                        <div className="flex justify-between text-[10px] text-zinc-400">
-                          <span>{t('贴纸缩放 (Scale)', 'Scale')}</span>
-                          <span className="font-mono text-zinc-200">
-                            {Math.round((selectedImageSlot.frameAssetScale ?? 1) * 100)}%
-                          </span>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-zinc-400 shrink-0">
+                          {t('透明度', 'Opacity')}
+                        </span>
                         <RangeSliderWithDefault
-                          min={0.5}
-                          max={2.5}
+                          min={0.1}
+                          max={1}
                           step={0.05}
-                          value={selectedImageSlot.frameAssetScale ?? 1}
+                          value={selectedRoot.bgImageOpacity ?? 1}
                           defaultValue={1}
-                          unit="x"
                           lang={lang}
                           onChange={(val) =>
-                            updateImageSlotById(selectedImageSlot.id, {
-                              frameAssetScale: val,
-                            })
+                            updateRootBlock(selectedRoot.id, (prev) => ({
+                              ...prev,
+                              bgImageOpacity: val,
+                            } as SectionContainerBlock))
                           }
                         />
                       </div>
                     </div>
                   )}
                 </div>
-              </div>
-            )}
-          </div>
-        ) : selectedChild && selectedRoot ? (
-          /* ========================================================= */
-          /* 2. SELECTED INNER CONTENT BLOCK INSPECTOR                 */
-          /* ========================================================= */
-          <div className="bg-zinc-800/70 border border-zinc-700 rounded-lg p-3 space-y-3">
-            <div className="flex items-center justify-between border-b border-zinc-700/80 pb-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-100">
-                <Layers size={14} className="text-blue-400" />
-                <span>{t('内部组件设置', 'Component Settings')}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => selectBlock(selectedRoot.id, null)}
-                className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 hover:bg-zinc-700 text-blue-400 border border-zinc-700"
-              >
-                {t('切换至外层容器', 'Edit Container')}
-              </button>
-            </div>
 
+                {/* Border Style & Corner Sticker */}
+                <div className="bg-zinc-900/90 border border-zinc-700/70 rounded p-2.5 space-y-2">
+                  {selectedRoot.bordered !== false && (
+                    <>
+                      <label className="block text-[10px] font-semibold text-zinc-400">
+                        {t('外框线型与粗细', 'Border Style & Width')}
+                      </label>
+                      <div className="grid grid-cols-4 gap-1">
+                        {(
+                          [
+                            { id: 'solid', zh: '实线', en: 'Solid' },
+                            { id: 'dashed', zh: '虚线', en: 'Dash' },
+                            { id: 'double', zh: '双线', en: 'Double' },
+                            { id: 'top_thick', zh: '顶粗条', en: 'Top Bar' },
+                          ] as {
+                            id: ContainerBorderStyleType;
+                            zh: string;
+                            en: string;
+                          }[]
+                        ).map((bs) => (
+                          <button
+                            key={bs.id}
+                            type="button"
+                            onClick={() =>
+                              updateRootBlock(selectedRoot.id, (prev) => ({
+                                ...prev,
+                                borderStyle: bs.id,
+                                borderWidth:
+                                  bs.id === 'double' &&
+                                  ((prev as SectionContainerBlock).borderWidth ??
+                                    1) < 3
+                                    ? 3
+                                    : (prev as SectionContainerBlock).borderWidth,
+                              } as SectionContainerBlock))
+                            }
+                            className={`py-1 rounded text-[10px] font-semibold border ${
+                              (selectedRoot.borderStyle || 'solid') === bs.id
+                                ? 'bg-zinc-100 text-zinc-900 border-white'
+                                : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                            }`}
+                          >
+                            {t(bs.zh, bs.en)}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[1, 1.5, 2, 3].map((bw) => (
+                          <button
+                            key={bw}
+                            type="button"
+                            onClick={() =>
+                              updateRootBlock(selectedRoot.id, (prev) => ({
+                                ...prev,
+                                borderWidth: bw,
+                              } as SectionContainerBlock))
+                            }
+                            className={`py-0.5 rounded text-[10px] font-bold border ${
+                              (selectedRoot.borderWidth ?? 1) === bw
+                                ? 'bg-zinc-100 text-zinc-900 border-white'
+                                : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                            }`}
+                          >
+                            {bw}px
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Corner Sticker */}
+                  <div className="pt-1">
+                    <input
+                      ref={cornerStickerInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadCornerSticker}
+                      className="hidden"
+                    />
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => cornerStickerInputRef.current?.click()}
+                        className="flex-1 py-1.5 px-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 rounded text-[11px] font-semibold flex items-center justify-center gap-1"
+                      >
+                        <Upload size={11} />
+                        <span>
+                          {selectedRoot.cornerStickerUrl
+                            ? t('更换右上角标贴纸', 'Change Corner Sticker')
+                            : t('上传右上角标贴纸', 'Corner Sticker PNG')}
+                        </span>
+                      </button>
+                      {selectedRoot.cornerStickerUrl && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateRootBlock(selectedRoot.id, (prev) => ({
+                              ...prev,
+                              cornerStickerUrl: null,
+                            } as SectionContainerBlock))
+                          }
+                          className="px-2 py-1 bg-zinc-950 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-[11px]"
+                        >
+                          {t('清除', 'Clear')}
+                        </button>
+                      )}
+                    </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+        ) : selectedRoot?.type === 'highlights_bar' ? (
+          // Highlights Bar Inspector
+          (() => {
+            const b = selectedRoot as HighlightsBarBlock;
+            return (
+              <div className="bg-zinc-800/60 border border-zinc-800 rounded-lg p-3 space-y-2.5">
+                <div className="text-xs font-bold text-white">
+                  {t('看点卡片横栏', 'Highlights Bar')}
+                </div>
+                <div className="flex gap-3 text-xs text-zinc-300">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={b.showHeading !== false}
+                      onChange={(e) =>
+                        updateRootBlock(b.id, (prev) => ({
+                          ...prev,
+                          showHeading: e.target.checked,
+                        } as HighlightsBarBlock))
+                      }
+                      className="rounded accent-blue-500"
+                    />
+                    <span>{t('显示标题', 'Show Heading')}</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={b.showBullet !== false}
+                      onChange={(e) =>
+                        updateRootBlock(b.id, (prev) => ({
+                          ...prev,
+                          showBullet: e.target.checked,
+                        } as HighlightsBarBlock))
+                      }
+                      className="rounded accent-blue-500"
+                    />
+                    <span>{t('显示符号', 'Show Icon')}</span>
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateRootBlock(b.id, (prev) => {
+                      const cur = prev as HighlightsBarBlock;
+                      return {
+                        ...cur,
+                        items: [
+                          ...cur.items,
+                          {
+                            id: uid('hl'),
+                            title: t('新增看点', 'NEW'),
+                            subtitle: t('点击编辑标题', 'Title'),
+                            showSubtitle: true,
+                            image: createImageSlot('4:3', 'HIGHLIGHT'),
+                            bgColor: '#52525b',
+                          },
+                        ],
+                      };
+                    })
+                  }
+                  className="w-full py-1.5 px-2 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 rounded text-xs text-zinc-200 flex items-center justify-center gap-1"
+                >
+                  <Plus size={12} />
+                  <span>{t('添加看点卡片', 'Add Highlight Card')}</span>
+                </button>
+              </div>
+            );
+          })()
+        ) : selectedRoot?.type === 'masthead' ? (
+          // Masthead Banner Inspector
+          (() => {
+            const b = selectedRoot as MastheadBlock;
+            return (
+              <div className="bg-zinc-800/60 border border-zinc-800 rounded-lg p-3 space-y-2.5">
+                <div className="text-xs font-bold text-white">
+                  {t('报头封面横幅', 'Masthead Banner')}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 text-xs text-zinc-300">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={b.showTopBar !== false}
+                      onChange={(e) =>
+                        updateRootBlock(b.id, (prev) => ({
+                          ...prev,
+                          showTopBar: e.target.checked,
+                        } as MastheadBlock))
+                      }
+                      className="rounded accent-blue-500"
+                    />
+                    <span>{t('顶部机构与期数', 'Top Bar')}</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={b.showHeroOverlay !== false}
+                      onChange={(e) =>
+                        updateRootBlock(b.id, (prev) => ({
+                          ...prev,
+                          showHeroOverlay: e.target.checked,
+                        } as MastheadBlock))
+                      }
+                      className="rounded accent-blue-500"
+                    />
+                    <span>{t('封面大标题', 'Hero Title')}</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={b.showSubBanner !== false}
+                      onChange={(e) =>
+                        updateRootBlock(b.id, (prev) => ({
+                          ...prev,
+                          showSubBanner: e.target.checked,
+                        } as MastheadBlock))
+                      }
+                      className="rounded accent-blue-500"
+                    />
+                    <span>{t('底部副横幅', 'Sub Banner')}</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={b.showSubBannerDesc !== false}
+                      onChange={(e) =>
+                        updateRootBlock(b.id, (prev) => ({
+                          ...prev,
+                          showSubBannerDesc: e.target.checked,
+                        } as MastheadBlock))
+                      }
+                      className="rounded accent-blue-500"
+                    />
+                    <span>{t('导读寄语', 'Sub Text')}</span>
+                  </label>
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-zinc-400">
+                    {t('报头主题色', 'Banner Accent')}
+                  </span>
+                  <input
+                    type="color"
+                    value={b.accentColor}
+                    onChange={(e) =>
+                      updateRootBlock(b.id, (prev) => ({
+                        ...prev,
+                        accentColor: e.target.value,
+                      } as MastheadBlock))
+                    }
+                    className="w-6 h-6 bg-transparent border-0 cursor-pointer"
+                  />
+                </div>
+              </div>
+            );
+          })()
+        ) : selectedRoot?.type === 'footer_banner' ? (
+          // Footer Banner Inspector
+          (() => {
+            const b = selectedRoot as FooterBannerBlock;
+            return (
+              <div className="bg-zinc-800/60 border border-zinc-800 rounded-lg p-3 space-y-2.5">
+                <div className="text-xs font-bold text-white">
+                  {t('页脚收尾横幅', 'Footer Banner')}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 text-xs text-zinc-300">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={b.showOverlayText !== false}
+                      onChange={(e) =>
+                        updateRootBlock(b.id, (prev) => ({
+                          ...prev,
+                          showOverlayText: e.target.checked,
+                        } as FooterBannerBlock))
+                      }
+                      className="rounded accent-blue-500"
+                    />
+                    <span>{t('显示覆盖文字', 'Overlay Text')}</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={b.showBrandLabel !== false}
+                      onChange={(e) =>
+                        updateRootBlock(b.id, (prev) => ({
+                          ...prev,
+                          showBrandLabel: e.target.checked,
+                        } as FooterBannerBlock))
+                      }
+                      className="rounded accent-blue-500"
+                    />
+                    <span>{t('显示底部品牌', 'Brand Label')}</span>
+                  </label>
+                </div>
+              </div>
+            );
+          })()
+                  ) : null}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ========================================================= */}
+        {/* 2. INNER CONTENT BLOCK INSPECTOR (COMPONENT LEVEL)        */}
+        {/* ========================================================= */}
+        {(() => {
+          const isCollapsed = isToolCollapsed('component');
+
+          if (!selectedChild || !selectedRoot) {
+            return (
+              <div className="bg-zinc-900/40 border border-dashed border-zinc-750 rounded-xl p-3 space-y-2 opacity-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+                    <Layers size={13} className="text-zinc-500" />
+                    <span>{t('内部组件设置', 'Component Settings')}</span>
+                  </div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
+                    {t('未选中组件', 'Inactive')}
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-500">
+                  {t('在容器中点击任意卡片或排版组件，即可在此调整网格与排版。', 'Click any component to customize layout.')}
+                </p>
+                {selectedRoot && selectedRoot.type === 'section_container' && selectedRoot.children.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    <span className="text-[10px] text-zinc-500 w-full">{t('快速聚焦当前容器内组件:', 'Focus block in container:')}</span>
+                    {selectedRoot.children.map((child: ContentBlock, idx: number) => (
+                      <button
+                        key={child.id}
+                        type="button"
+                        onClick={() => selectBlock(selectedRoot.id, child.id)}
+                        className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-blue-400 border border-zinc-700 text-[10px]"
+                      >
+                        #{idx + 1} {child.type}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          return (
+            <div
+              className={`rounded-xl p-3 space-y-3 transition-all ${
+                isDirectChildSelected
+                  ? 'bg-zinc-850 border-2 border-blue-500/80 shadow-md ring-1 ring-blue-500/30'
+                  : 'bg-zinc-850/60 border border-zinc-700/60'
+              }`}
+            >
+              <div className="flex items-center justify-between border-b border-zinc-700/60 pb-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-zinc-100 truncate max-w-[210px]">
+                  <Layers size={14} className={isDirectChildSelected ? 'text-blue-400 shrink-0' : 'text-zinc-400 shrink-0'} />
+                  <span className={isDirectChildSelected ? 'text-white truncate' : 'text-zinc-200 truncate'}>
+                    {t('内部组件设置', 'Component Settings')} ({selectedChild.type})
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {isDirectChildSelected ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold">
+                      {t('当前编辑组件', 'Active')}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        selectImageSlot(null);
+                        selectBlock(selectedRoot.id, selectedChild.id);
+                      }}
+                      className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-blue-400 border border-zinc-700 transition-colors"
+                      title={t('聚焦回所属组件', 'Focus back to parent component')}
+                    >
+                      {t('所属组件 · 聚焦', 'Parent · Focus')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleTool('component')}
+                    className="p-1 rounded text-zinc-400 hover:text-white transition-colors"
+                    title={isCollapsed ? t('展开组件工具', 'Expand') : t('折叠组件工具', 'Collapse')}
+                  >
+                    {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              {!isCollapsed && (
+                <div className="space-y-3">
             {/* Split Media + Text */}
             {selectedChild.type === 'split_media_text' && (() => {
               const b = selectedChild as SplitMediaTextBlock;
@@ -3434,863 +3933,1615 @@ export const RightInspector: React.FC = () => {
                 </div>
               );
             })()}
-          </div>
-        ) : selectedRoot?.type === 'section_container' ? (
-          /* ========================================================= */
-          /* 3. SECTION CONTAINER INSPECTOR (SIMPLIFIED 3-TAB LAYOUT)  */
-          /* ========================================================= */
-          <div className="bg-zinc-800/60 border border-zinc-800 rounded-lg p-3 space-y-3">
-            {/* Title Row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-100 truncate">
-                <Palette size={13} className="text-blue-400 shrink-0" />
-                <span className="truncate">
-                  {selectedRoot.showHeader === false
-                    ? t('空白自由容器', 'Blank Container')
-                    : `[${selectedRoot.sectionNumber}] ${selectedRoot.title}`}
-                </span>
-              </div>
-            </div>
 
-            {/* 3-Tab Switcher inside Container Inspector */}
-            <div className="grid grid-cols-3 bg-zinc-950 p-0.5 rounded-md border border-zinc-800 text-[11px] font-semibold">
-              <button
-                type="button"
-                onClick={() => setContainerTab('style')}
-                className={`py-1 rounded transition-colors ${
-                  containerTab === 'style'
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                {t('外观配色', 'Style')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setContainerTab('icons')}
-                className={`py-1 rounded transition-colors ${
-                  containerTab === 'icons'
-                    ? 'bg-zinc-800 text-amber-300 shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                {t('徽章与符号', 'Icons')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setContainerTab('bg')}
-                className={`py-1 rounded transition-colors ${
-                  containerTab === 'bg'
-                    ? 'bg-zinc-800 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                {t('底纹与边框', 'Background')}
-              </button>
-            </div>
+            {/* Picture Collage Block Inspector */}
+            {selectedChild.type === 'picture_collage' && (() => {
+              const b = selectedChild as PictureCollageBlock;
+              const isFreehand = b.layoutMode === 'freehand';
 
-            {/* TAB 1: STYLE & STRUCTURE */}
-            {containerTab === 'style' && (
-              <div className="space-y-3 pt-0.5">
-                {/* Structure Toggles */}
-                <div className="bg-zinc-900/90 border border-zinc-700/70 rounded p-2 grid grid-cols-3 gap-1.5 text-[11px] text-zinc-200">
-                  <label className="flex items-center gap-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedRoot.showHeader !== false}
-                      onChange={(e) =>
-                        updateRootBlock(selectedRoot.id, (prev) => ({
-                          ...prev,
-                          showHeader: e.target.checked,
-                        } as SectionContainerBlock))
-                      }
-                      className="rounded accent-blue-500"
-                    />
-                    <span>{t('标题栏', 'Header')}</span>
-                  </label>
-                  <label className="flex items-center gap-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedRoot.showBadge !== false}
-                      onChange={(e) =>
-                        updateRootBlock(selectedRoot.id, (prev) => ({
-                          ...prev,
-                          showBadge: e.target.checked,
-                        } as SectionContainerBlock))
-                      }
-                      className="rounded accent-blue-500"
-                    />
-                    <span>{t('编号框', 'Badge')}</span>
-                  </label>
-                  <label className="flex items-center gap-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedRoot.bordered !== false}
-                      onChange={(e) =>
-                        updateRootBlock(selectedRoot.id, (prev) => ({
-                          ...prev,
-                          bordered: e.target.checked,
-                        } as SectionContainerBlock))
-                      }
-                      className="rounded accent-blue-500"
-                    />
-                    <span>{t('外边框', 'Border')}</span>
-                  </label>
-                </div>
+              const presetOptions: Array<{ id: CollagePresetType; label: string; desc: string }> = [
+                { id: '1_hero', label: '1张 · 焦点大图', desc: '单张全宽全焦点' },
+                { id: '2_split_h', label: '2张 · 左右对齐', desc: '左右等宽对称' },
+                { id: '2_split_v', label: '2张 · 上下排列', desc: '上下双图流' },
+                { id: '3_one_top_two', label: '3张 · 上一后二', desc: '顶部大图+底部双列' },
+                { id: '3_two_left_one', label: '3张 · 左一右二', desc: '左侧主图+右侧双图' },
+                { id: '3_grid', label: '3张 · 三列等宽', desc: '三栏经典横排' },
+                { id: '4_grid_2x2', label: '4张 · 田字四宫格', desc: '2x2 经典对称方块' },
+                { id: '4_one_left_three', label: '4张 · 左一右三', desc: '左侧大图+右侧竖排三张' },
+                { id: '5_mosaic', label: '5张 · 错落马赛克', desc: '错落有致画廊' },
+                { id: '6_grid_3x2', label: '6张 · 六宫格', desc: '3x2 六图标准矩阵' },
+                { id: 'polaroid_pile', label: '自由 · 拍立得叠放', desc: '拍立得错落堆叠风' },
+                { id: 'masonry', label: '多图 · 瀑布流画廊', desc: '自适应瀑布流' },
+              ];
 
-                {/* Theme Presets */}
-                <div>
-                  <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                    {t('预设配色', 'Theme Preset')}
-                  </label>
-                  <div className="grid grid-cols-2 gap-1">
-                    {Object.values(SECTION_THEMES).map((themePreset) => {
-                      const isCurrent = selectedRoot.theme.id === themePreset.id;
-                      return (
-                        <button
-                          key={themePreset.id}
-                          type="button"
-                          onClick={() =>
-                            updateRootBlock(selectedRoot.id, (prev) => ({
-                              ...prev,
-                              theme: { ...themePreset },
-                            } as SectionContainerBlock))
-                          }
-                          className={`px-2 py-1.5 rounded border text-left flex items-center gap-1.5 text-[11px] transition-all ${
-                            isCurrent
-                              ? 'bg-zinc-800 border-white text-white font-semibold'
-                              : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                          }`}
-                        >
-                          <span
-                            className="w-3.5 h-3.5 rounded-sm border border-white/20 shrink-0"
-                            style={{ backgroundColor: themePreset.primaryColor }}
-                          />
-                          <span className="truncate">
-                            {themePreset.name.split(' ')[0]}
-                          </span>
-                        </button>
-                      );
-                    })}
+              return (
+                <div className="space-y-3">
+                  {/* Mode Selector */}
+                  <div className="grid grid-cols-2 bg-zinc-950 p-1 rounded-lg border border-zinc-800 text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, layoutMode: 'preset' } as PictureCollageBlock))}
+                      className={`py-1.5 rounded transition-all flex items-center justify-center gap-1.5 ${
+                        !isFreehand ? 'bg-blue-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <LayoutGrid size={13} />
+                      <span>{t('预设排版网格', 'Preset Layouts')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, layoutMode: 'freehand' } as PictureCollageBlock))}
+                      className={`py-1.5 rounded transition-all flex items-center justify-center gap-1.5 ${
+                        isFreehand ? 'bg-amber-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <Sliders size={13} />
+                      <span>{t('自由手绘排版', 'Freehand Canvas')}</span>
+                    </button>
                   </div>
-                </div>
 
-                {/* Custom Color Pickers */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                      {t('主色调', 'Accent Color')}
-                    </label>
-                    <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded px-2 py-1">
-                      <input
-                        type="color"
-                        value={selectedRoot.theme.primaryColor}
-                        onChange={(e) =>
-                          updateRootBlock(selectedRoot.id, (prev) => {
-                            const sec = prev as SectionContainerBlock;
-                            return {
-                              ...sec,
-                              theme: {
-                                ...sec.theme,
-                                id: 'custom',
-                                primaryColor: e.target.value,
-                              },
-                            };
-                          })
-                        }
-                        className="w-4 h-4 bg-transparent border-0 cursor-pointer"
-                      />
-                      <span className="text-[10px] font-mono text-zinc-300">
-                        {selectedRoot.theme.primaryColor}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                      {t('容器底色', 'Background')}
-                    </label>
-                    <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded px-2 py-1">
-                      <input
-                        type="color"
-                        value={selectedRoot.theme.containerBg}
-                        onChange={(e) =>
-                          updateRootBlock(selectedRoot.id, (prev) => {
-                            const sec = prev as SectionContainerBlock;
-                            return {
-                              ...sec,
-                              theme: {
-                                ...sec.theme,
-                                id: 'custom',
-                                containerBg: e.target.value,
-                              },
-                            };
-                          })
-                        }
-                        className="w-4 h-4 bg-transparent border-0 cursor-pointer"
-                      />
-                      <span className="text-[10px] font-mono text-zinc-300">
-                        {selectedRoot.theme.containerBg}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Padding & Radius */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-semibold text-zinc-400">
-                        {t('内边距', 'Padding')}
+                  {/* Mode 1: Preset Layout */}
+                  {!isFreehand && (
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-semibold text-zinc-300">
+                        {t('选择预设网格布局', 'Select Grid Layout')}
                       </label>
-                      <span className="text-[9px] font-mono text-zinc-500">
-                        {typeof selectedRoot.customPadding === 'number'
-                          ? selectedRoot.customPadding
-                          : selectedRoot.padding === 'none'
-                          ? 0
-                          : selectedRoot.padding === 'sm'
-                          ? 10
-                          : selectedRoot.padding === 'lg'
-                          ? 18
-                          : 14}px
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1">
-                      {(['none', 'sm', 'md', 'lg'] as const).map((pad) => {
-                        const valMap = { none: 0, sm: 10, md: 14, lg: 18 };
-                        const curVal =
-                          typeof selectedRoot.customPadding === 'number'
-                            ? selectedRoot.customPadding
-                            : valMap[selectedRoot.padding || 'md'];
-                        const isActive =
-                          selectedRoot.customPadding === undefined
-                            ? selectedRoot.padding === pad
-                            : curVal === valMap[pad];
-
-                        return (
+                      <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                        {presetOptions.map((opt) => (
                           <button
-                            key={pad}
+                            key={opt.id}
                             type="button"
-                            onClick={() =>
-                              updateRootBlock(selectedRoot.id, (prev) => ({
-                                ...prev,
-                                padding: pad,
-                                customPadding: valMap[pad],
-                              } as SectionContainerBlock))
-                            }
-                            className={`py-1 rounded text-[10px] font-bold border transition-colors ${
-                              isActive
-                                ? 'bg-zinc-100 text-zinc-900 border-white'
-                                : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                            onClick={() => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, presetType: opt.id } as PictureCollageBlock))}
+                            className={`p-2 rounded border text-left transition-all ${
+                              b.presetType === opt.id
+                                ? 'bg-blue-900/40 border-blue-500 text-blue-200'
+                                : 'bg-zinc-900/80 border-zinc-750 text-zinc-300 hover:border-zinc-600'
                             }`}
                           >
-                            {pad === 'none' ? '0' : pad.toUpperCase()}
+                            <div className="text-xs font-bold truncate">{opt.label}</div>
+                            <div className="text-[10px] text-zinc-400 truncate">{opt.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mode 2: Freehand Height */}
+                  {isFreehand && (
+                    <div className="space-y-2 bg-amber-950/20 border border-amber-900/40 rounded-lg p-2.5">
+                      <div className="flex items-center justify-between text-xs text-amber-200">
+                        <span>{t('自由画布高度', 'Canvas Height')}</span>
+                        <span className="font-mono text-zinc-300">{b.containerHeight || 380}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={240}
+                        max={720}
+                        step={20}
+                        value={b.containerHeight || 380}
+                        onChange={(e) => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, containerHeight: Number(e.target.value) } as PictureCollageBlock))}
+                        className="w-full accent-amber-500 cursor-pointer"
+                      />
+                      <p className="text-[10px] text-amber-400/80">
+                        {t('提示：在画布中可以直接任意拖拽照片位置、拖拽右下角手柄缩放图片大小。', 'Tip: Drag photos freely on canvas and use bottom-right handle to resize.')}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Shared Styling: Gap, Border Radius */}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-[10px] text-zinc-400 block mb-1">{t('照片间距', 'Photo Gap')} ({b.gap ?? 8}px)</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={24}
+                        step={2}
+                        value={b.gap ?? 8}
+                        onChange={(e) => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, gap: Number(e.target.value) } as PictureCollageBlock))}
+                        className="w-full accent-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 block mb-1">{t('圆角弧度', 'Border Radius')} ({b.borderRadius ?? 6}px)</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={24}
+                        step={2}
+                        value={b.borderRadius ?? 6}
+                        onChange={(e) => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, borderRadius: Number(e.target.value) } as PictureCollageBlock))}
+                        className="w-full accent-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Photos Manager in Collage */}
+                  <div className="space-y-2 pt-1 border-t border-zinc-750">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-zinc-200">
+                        {t('拼贴照片列表', 'Collage Photos')} ({b.items.length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const count = b.items.length;
+                          const newItem = createPictureCollageItem('4:3', `PHOTO ${String(count + 1).padStart(2, '0')}`, {
+                            x: 10 + (count % 3) * 20,
+                            y: 10 + (count % 3) * 15,
+                            width: 44,
+                            rotation: (count % 2 === 0 ? 3 : -3),
+                            zIndex: count + 1,
+                          });
+                          updateContentBlock(selectedRoot.id, b.id, (prev) => {
+                            const cur = prev as PictureCollageBlock;
+                            return { ...cur, items: [...cur.items, newItem] };
+                          });
+                        }}
+                        className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold flex items-center gap-1"
+                      >
+                        <Plus size={11} />
+                        <span>{t('添加照片', 'Add')}</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                      {b.items.map((item: any, idx: number) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between p-2 rounded bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 hover:border-zinc-700"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => selectImageSlot(item.image.id)}
+                            className="flex items-center gap-2 truncate text-left hover:text-blue-400"
+                            title={t('点击聚焦此照片画框工具', 'Focus photo frame tool')}
+                          >
+                            <span className="font-mono text-[10px] text-zinc-500">#{idx + 1}</span>
+                            <span className="truncate max-w-[120px]">{item.image.label || 'PHOTO'}</span>
+                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => selectImageSlot(item.image.id)}
+                              className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-blue-400 text-[10px]"
+                            >
+                              {t('编辑', 'Edit')}
+                            </button>
+                            {b.items.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateContentBlock(selectedRoot.id, b.id, (prev) => {
+                                    const cur = prev as PictureCollageBlock;
+                                    return { ...cur, items: cur.items.filter((_: any, i: number) => i !== idx) };
+                                  });
+                                }}
+                                className="p-1 rounded hover:bg-red-950 text-zinc-400 hover:text-red-400"
+                                title={t('删除照片', 'Delete')}
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Table Block Inspector */}
+            {selectedChild.type === 'table_block' && (() => {
+              const b = selectedChild as TableBlock;
+              const rowCount = b.rows?.length ?? 0;
+              const colCount = Math.max(1, (b.headers?.length || (b.rows?.[0]?.length ?? 1)));
+              const activeSideTab = activeTableSideTab;
+              const setActiveSideTab = setActiveTableSideTab;
+
+              const isSideActive = (side: string) => {
+                switch (side) {
+                  case 'top': return b.borderTop;
+                  case 'bottom': return b.borderBottom;
+                  case 'left': return b.borderLeft;
+                  case 'right': return b.borderRight;
+                  case 'horizontal': return b.innerBorderHorizontal;
+                  case 'vertical': return b.innerBorderVertical;
+                  case 'outer': return b.borderTop && b.borderBottom && b.borderLeft && b.borderRight;
+                  case 'all': return b.borderTop && b.borderBottom && b.borderLeft && b.borderRight && b.innerBorderHorizontal && b.innerBorderVertical;
+                  default: return false;
+                }
+              };
+
+              const setSideState = (side: string, enabled: boolean) => {
+                updateContentBlock(selectedRoot.id, b.id, (prev) => {
+                  const cur = prev as TableBlock;
+                  switch (side) {
+                    case 'top': return { ...cur, borderTop: enabled };
+                    case 'bottom': return { ...cur, borderBottom: enabled };
+                    case 'left': return { ...cur, borderLeft: enabled };
+                    case 'right': return { ...cur, borderRight: enabled };
+                    case 'horizontal': return { ...cur, innerBorderHorizontal: enabled };
+                    case 'vertical': return { ...cur, innerBorderVertical: enabled };
+                    case 'outer': return { ...cur, borderTop: enabled, borderBottom: enabled, borderLeft: enabled, borderRight: enabled };
+                    case 'all': return { ...cur, borderTop: enabled, borderBottom: enabled, borderLeft: enabled, borderRight: enabled, innerBorderHorizontal: enabled, innerBorderVertical: enabled };
+                    default: return cur;
+                  }
+                });
+              };
+
+              const addRow = () => {
+                const newRow = Array.from({ length: colCount }, () => ({
+                  id: uid('cell'),
+                  content: '新单元格',
+                }));
+                updateContentBlock(selectedRoot.id, b.id, (prev) => {
+                  const cur = prev as TableBlock;
+                  return { ...cur, rows: [...cur.rows, newRow] };
+                });
+              };
+
+              const removeRow = () => {
+                if (rowCount <= 1) return;
+                updateContentBlock(selectedRoot.id, b.id, (prev) => {
+                  const cur = prev as TableBlock;
+                  return { ...cur, rows: cur.rows.slice(0, -1) };
+                });
+              };
+
+              const addColumn = () => {
+                updateContentBlock(selectedRoot.id, b.id, (prev) => {
+                  const cur = prev as TableBlock;
+                  const newHeaders = [...cur.headers, `列 ${cur.headers.length + 1}`];
+                  const newRows = cur.rows.map((row) => [
+                    ...row,
+                    { id: uid('cell'), content: '新内容' },
+                  ]);
+                  return { ...cur, headers: newHeaders, rows: newRows };
+                });
+              };
+
+              const removeColumn = () => {
+                if (colCount <= 1) return;
+                updateContentBlock(selectedRoot.id, b.id, (prev) => {
+                  const cur = prev as TableBlock;
+                  const newHeaders = cur.headers.slice(0, -1);
+                  const newRows = cur.rows.map((row) => row.slice(0, -1));
+                  return { ...cur, headers: newHeaders, rows: newRows };
+                });
+              };
+
+              return (
+                <div className="space-y-3">
+                  {/* Table Presets: 4 compact icon/label chips in 1 row */}
+                  <div>
+                    <div className="grid grid-cols-4 gap-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateContentBlock(selectedRoot.id, b.id, (prev) => ({
+                            ...prev,
+                            borderTop: false,
+                            borderBottom: true,
+                            borderLeft: false,
+                            borderRight: false,
+                            innerBorderHorizontal: true,
+                            innerBorderVertical: false,
+                            borderColor: '#15803d',
+                            borderWidth: 1,
+                            borderStyle: 'solid',
+                            zebraStriping: false,
+                            headerAlign: 'center',
+                            textAlign: 'center',
+                          } as TableBlock))
+                        }
+                        title={t('战报横线表：上下实线 + 行间横向分割线，无外竖线 (适合战报汇总)', 'Tournament Report: Top/bottom borders + row dividers, no vertical lines')}
+                        className="py-1.5 px-1 rounded bg-zinc-900 border border-zinc-700/80 hover:border-emerald-500 text-center transition-all group"
+                      >
+                        <span className="text-emerald-400 font-bold block text-xs">📰 战报</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateContentBlock(selectedRoot.id, b.id, (prev) => ({
+                            ...prev,
+                            borderTop: true,
+                            borderBottom: true,
+                            borderLeft: true,
+                            borderRight: true,
+                            innerBorderHorizontal: true,
+                            innerBorderVertical: true,
+                            borderColor: '#e4e4e7',
+                            borderWidth: 1,
+                            borderStyle: 'solid',
+                          } as TableBlock))
+                        }
+                        title={t('全网格表：显示四周边框与全部内部横竖分割线', 'Full Grid: Show all outer borders & internal dividers')}
+                        className="py-1.5 px-1 rounded bg-zinc-900 border border-zinc-700/80 hover:border-blue-500 text-center transition-all group"
+                      >
+                        <span className="text-blue-400 font-bold block text-xs">▦ 网格</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateContentBlock(selectedRoot.id, b.id, (prev) => ({
+                            ...prev,
+                            borderTop: true,
+                            borderBottom: true,
+                            borderLeft: false,
+                            borderRight: false,
+                            innerBorderHorizontal: true,
+                            innerBorderVertical: false,
+                            borderColor: '#d4d4d8',
+                            borderWidth: 1,
+                            borderStyle: 'solid',
+                          } as TableBlock))
+                        }
+                        title={t('水平横线表：仅保留横向行间分割线 (商务清晰)', 'Horizontal Lines: Keep only horizontal row dividers')}
+                        className="py-1.5 px-1 rounded bg-zinc-900 border border-zinc-700/80 hover:border-zinc-500 text-center transition-all group"
+                      >
+                        <span className="text-zinc-200 font-bold block text-xs">▤ 横线</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateContentBlock(selectedRoot.id, b.id, (prev) => ({
+                            ...prev,
+                            borderTop: false,
+                            borderBottom: false,
+                            borderLeft: false,
+                            borderRight: false,
+                            innerBorderHorizontal: false,
+                            innerBorderVertical: false,
+                          } as TableBlock))
+                        }
+                        title={t('极简无边框：隐藏全部边框与线条，纯留白排版', 'Minimalist: Hide all borders, pure whitespace')}
+                        className="py-1.5 px-1 rounded bg-zinc-900 border border-zinc-700/80 hover:border-zinc-500 text-center transition-all group"
+                      >
+                        <span className="text-zinc-400 font-bold block text-xs">▫ 极简</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Side Border Selector: Select the side tab, not blind toggling */}
+                  <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-2.5 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[11px] font-bold text-zinc-300">
+                        {t('边线选择与设置 (Select Side)', 'Border Side Selector')}
+                      </span>
+                      <span className="text-[10px] text-blue-400 font-mono font-bold">
+                        {activeSideTab.toUpperCase()}
+                      </span>
+                    </div>
+
+                    {/* Side Tabs: Click to SELECT the side tab with Clean Icons */}
+                    <div className="grid grid-cols-4 gap-1 text-[10px] font-semibold">
+                      {[
+                        {
+                          id: 'all',
+                          name: t('全框', 'All'),
+                          fullName: t('全部边线 (All Borders)', 'All Borders'),
+                          icon: (
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                              <rect x="2" y="2" width="12" height="12" rx="1" />
+                              <line x1="8" y1="2" x2="8" y2="14" />
+                              <line x1="2" y1="8" x2="14" y2="8" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'outer',
+                          name: t('外框', 'Outer'),
+                          fullName: t('四周外框 (Outer Box)', 'Outer Box'),
+                          icon: (
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                              <rect x="2" y="2" width="12" height="12" rx="1" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'top',
+                          name: t('上边', 'Top'),
+                          fullName: t('顶部上边 (Top Border)', 'Top Border'),
+                          icon: (
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round">
+                              <line x1="2" y1="3" x2="14" y2="3" stroke="currentColor" strokeWidth="2.2" />
+                              <rect x="2" y="3" width="12" height="10" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" opacity="0.35" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'bottom',
+                          name: t('下边', 'Bottom'),
+                          fullName: t('底部下边 (Bottom Border)', 'Bottom Border'),
+                          icon: (
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round">
+                              <line x1="2" y1="13" x2="14" y2="13" stroke="currentColor" strokeWidth="2.2" />
+                              <rect x="2" y="3" width="12" height="10" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" opacity="0.35" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'left',
+                          name: t('左边', 'Left'),
+                          fullName: t('左侧边线 (Left Border)', 'Left Border'),
+                          icon: (
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round">
+                              <line x1="3" y1="2" x2="3" y2="14" stroke="currentColor" strokeWidth="2.2" />
+                              <rect x="3" y="2" width="10" height="12" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" opacity="0.35" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'right',
+                          name: t('右边', 'Right'),
+                          fullName: t('右侧边线 (Right Border)', 'Right Border'),
+                          icon: (
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round">
+                              <line x1="13" y1="2" x2="13" y2="14" stroke="currentColor" strokeWidth="2.2" />
+                              <rect x="3" y="2" width="10" height="12" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" opacity="0.35" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'horizontal',
+                          name: t('横线', 'H-Line'),
+                          fullName: t('行间横线 (H-Lines)', 'H-Lines'),
+                          icon: (
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round">
+                              <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" strokeWidth="2.2" />
+                              <rect x="2" y="2" width="12" height="12" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" opacity="0.35" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          id: 'vertical',
+                          name: t('竖线', 'V-Line'),
+                          fullName: t('列间竖线 (V-Lines)', 'V-Lines'),
+                          icon: (
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round">
+                              <line x1="8" y1="2" x2="8" y2="14" stroke="currentColor" strokeWidth="2.2" />
+                              <rect x="2" y="2" width="12" height="12" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" opacity="0.35" />
+                            </svg>
+                          ),
+                        },
+                      ].map((s) => {
+                        const isSelectedSide = activeSideTab === s.id;
+                        const active = isSideActive(s.id);
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setActiveSideTab(s.id as any)}
+                            title={`${s.fullName} · ${active ? t('已开启 (Active)', 'Active') : t('已隐藏 (Hidden)', 'Hidden')}`}
+                            className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-lg border transition-all relative ${
+                              isSelectedSide
+                                ? 'bg-blue-600 text-white border-blue-500 font-bold shadow-sm ring-1 ring-blue-400/50'
+                                : active
+                                ? 'bg-zinc-800 text-zinc-100 border-zinc-700 hover:border-zinc-500'
+                                : 'bg-zinc-950 text-zinc-400 border-zinc-800/80 hover:text-zinc-200 hover:border-zinc-700'
+                            }`}
+                          >
+                            <div className="flex items-center justify-center h-4 w-4">
+                              {s.icon}
+                            </div>
+                            <span className="text-[9px] mt-0.5 font-medium leading-none">
+                              {s.name}
+                            </span>
+                            {/* Status indicator dot */}
+                            <span
+                              className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${
+                                active
+                                  ? isSelectedSide
+                                    ? 'bg-white'
+                                    : 'bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.8)]'
+                                  : 'bg-zinc-700'
+                              }`}
+                            />
                           </button>
                         );
                       })}
                     </div>
-                    <div className="mt-1 flex items-center gap-1 bg-zinc-950 border border-zinc-800 rounded px-1.5 py-0.5 focus-within:border-zinc-500 transition-colors">
-                      <span className="text-[9px] text-zinc-500 font-medium">
-                        {t('手动', 'Val')}
-                      </span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={160}
-                        value={
-                          typeof selectedRoot.customPadding === 'number'
-                            ? selectedRoot.customPadding
-                            : selectedRoot.padding === 'none'
-                            ? 0
-                            : selectedRoot.padding === 'sm'
-                            ? 10
-                            : selectedRoot.padding === 'lg'
-                            ? 18
-                            : 14
-                        }
-                        onChange={(e) => {
-                          const val = Math.max(0, parseInt(e.target.value) || 0);
-                          updateRootBlock(selectedRoot.id, (prev) => ({
-                            ...prev,
-                            customPadding: val,
-                          } as SectionContainerBlock));
-                        }}
-                        className="w-full bg-transparent text-right text-[10px] font-mono font-bold text-zinc-200 outline-none"
-                      />
-                      <span className="text-[9px] font-mono text-zinc-500">px</span>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-semibold text-zinc-400">
-                        {t('圆角', 'Radius')}
-                      </label>
-                      <span className="text-[9px] font-mono text-zinc-500">
-                        {selectedRoot.borderRadius ?? 0}px
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1">
-                      {[0, 10, 16].map((rad) => (
-                        <button
-                          key={rad}
-                          type="button"
-                          onClick={() =>
-                            updateRootBlock(selectedRoot.id, (prev) => ({
-                              ...prev,
-                              borderRadius: rad,
-                            } as SectionContainerBlock))
-                          }
-                          className={`py-1 rounded text-[10px] font-bold border transition-colors ${
-                            selectedRoot.borderRadius === rad
-                              ? 'bg-zinc-100 text-zinc-900 border-white'
-                              : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
-                          }`}
-                        >
-                          {rad}px
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mt-1 flex items-center gap-1 bg-zinc-950 border border-zinc-800 rounded px-1.5 py-0.5 focus-within:border-zinc-500 transition-colors">
-                      <span className="text-[9px] text-zinc-500 font-medium">
-                        {t('手动', 'Val')}
-                      </span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={160}
-                        value={selectedRoot.borderRadius ?? 0}
-                        onChange={(e) => {
-                          const val = Math.max(0, parseInt(e.target.value) || 0);
-                          updateRootBlock(selectedRoot.id, (prev) => ({
-                            ...prev,
-                            borderRadius: val,
-                          } as SectionContainerBlock));
-                        }}
-                        className="w-full bg-transparent text-right text-[10px] font-mono font-bold text-zinc-200 outline-none"
-                      />
-                      <span className="text-[9px] font-mono text-zinc-500">px</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
-            {/* TAB 2: BADGE [1] & BULLET ■ ICONS */}
-            {containerTab === 'icons' && (
-              <div className="space-y-3 pt-0.5">
-                {/* 1. Section Number Badge [1] */}
-                <div className="bg-zinc-900/90 border border-zinc-700/70 rounded p-2.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-zinc-200">
-                      {t('章节编号 [1] 样式', 'Section Badge [1]')}
-                    </span>
-                    <span className="text-[10px] font-mono text-zinc-400">
-                      {selectedRoot.badgeSize || 26}px
-                    </span>
-                  </div>
-
-                  {/* Editable Number Text + Number Color Row */}
-                  <div className="flex items-center gap-2 bg-zinc-950/90 border border-zinc-800 rounded px-2 py-1.5">
-                    <span className="text-[10px] font-semibold text-zinc-400 shrink-0">
-                      {t('编号数字', 'Number')}
-                    </span>
-                    <input
-                      type="text"
-                      value={selectedRoot.sectionNumber}
-                      placeholder="1"
-                      onChange={(e) =>
-                        updateRootBlock(selectedRoot.id, (prev) => ({
-                          ...prev,
-                          sectionNumber: e.target.value,
-                        } as SectionContainerBlock))
-                      }
-                      className="w-14 bg-zinc-900 border border-zinc-700 rounded px-1.5 py-0.5 text-xs font-bold text-white text-center focus:outline-none focus:border-blue-500"
-                    />
-                    <div className="ml-auto flex items-center gap-1.5">
-                      <span className="text-[10px] text-zinc-400">
-                        {t('数字颜色', 'Text Color')}
-                      </span>
-                      <input
-                        type="color"
-                        value={
-                          selectedRoot.badgeTextColor ||
-                          selectedRoot.theme.headerTextColor ||
-                          '#ffffff'
-                        }
-                        onChange={(e) =>
-                          updateRootBlock(selectedRoot.id, (prev) => ({
-                            ...prev,
-                            badgeTextColor: e.target.value,
-                          } as SectionContainerBlock))
-                        }
-                        className="w-4 h-4 bg-transparent border-0 cursor-pointer"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-4 gap-1">
-                    {(
-                      [
-                        { id: 'rounded_square', zh: '圆角方', en: 'Square' },
-                        { id: 'flower', zh: '花瓣章', en: 'Flower' },
-                        { id: 'circle', zh: '圆形', en: 'Circle' },
-                        { id: 'hexagon', zh: '六边形', en: 'Hex' },
-                        { id: 'diamond', zh: '菱形', en: 'Diamond' },
-                        { id: 'pill', zh: '胶囊', en: 'Pill' },
-                        { id: 'outline', zh: '线框', en: 'Outline' },
-                        { id: 'custom_only', zh: '自定义底', en: 'Custom' },
-                      ] as { id: BadgeShapeType; zh: string; en: string }[]
-                    ).map((sh) => {
-                      const isActive = selectedRoot.badgeCustomUrl
-                        ? sh.id === 'custom_only'
-                        : (selectedRoot.badgeShape || 'rounded_square') === sh.id;
-                      return (
-                        <button
-                          key={sh.id}
-                          type="button"
-                          onClick={() => {
-                            if (sh.id === 'custom_only' && !selectedRoot.badgeCustomUrl) {
-                              sectionBadgeAssetInputRef.current?.click();
-                            }
-                            updateRootBlock(selectedRoot.id, (prev) => ({
-                              ...prev,
-                              badgeShape: sh.id,
-                              badgeCustomUrl:
-                                sh.id === 'custom_only'
-                                  ? (prev as SectionContainerBlock).badgeCustomUrl
-                                  : null,
-                            } as SectionContainerBlock));
-                          }}
-                          className={`py-1 rounded text-[10px] font-semibold border ${
-                            isActive
-                              ? 'bg-zinc-100 text-zinc-900 border-white'
-                              : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
-                          }`}
-                        >
-                          {t(sh.zh, sh.en)}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Size + Upload Row */}
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <RangeSliderWithDefault
-                      min={20}
-                      max={38}
-                      step={1}
-                      value={selectedRoot.badgeSize || 26}
-                      defaultValue={26}
-                      unit="px"
-                      lang={lang}
-                      onChange={(val) =>
-                        updateRootBlock(selectedRoot.id, (prev) => ({
-                          ...prev,
-                          badgeSize: Math.round(val),
-                        } as SectionContainerBlock))
-                      }
-                    />
-                    <input
-                      ref={sectionBadgeAssetInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleUploadSectionBadgeAsset}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => sectionBadgeAssetInputRef.current?.click()}
-                      className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 rounded text-[10px] font-semibold flex items-center gap-1 shrink-0"
-                    >
-                      <Upload size={10} />
-                      <span>
-                        {selectedRoot.badgeCustomUrl
-                          ? t('换底图', 'Change')
-                          : t('上传底图', 'Upload')}
-                      </span>
-                    </button>
-                    {selectedRoot.badgeCustomUrl && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateRootBlock(selectedRoot.id, (prev) => ({
-                            ...prev,
-                            badgeCustomUrl: null,
-                            badgeAssetScale: 1,
-                            badgeAssetX: 0,
-                            badgeAssetY: 0,
-                            badgeShape:
-                              (prev as SectionContainerBlock).badgeShape ===
-                              'custom_only'
-                                ? 'rounded_square'
-                                : (prev as SectionContainerBlock).badgeShape,
-                          } as SectionContainerBlock))
-                        }
-                        className="px-1.5 py-1 bg-zinc-950 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-[10px]"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Custom Badge Asset Size & Position Controls (Behind Number) */}
-                  {selectedRoot.badgeCustomUrl && (
-                    <div className="bg-zinc-950/90 border border-amber-500/30 rounded p-2 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-amber-300">
-                          {t(
-                            '数字后方自定义素材 · 大小与位置',
-                            'Custom Badge Asset · Size & Position'
-                          )}
-                        </span>
-                        {((selectedRoot.badgeAssetScale ?? 1) !== 1 ||
-                          (selectedRoot.badgeAssetX || 0) !== 0 ||
-                          (selectedRoot.badgeAssetY || 0) !== 0) && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateRootBlock(selectedRoot.id, (prev) => ({
-                                ...prev,
-                                badgeAssetScale: 1,
-                                badgeAssetX: 0,
-                                badgeAssetY: 0,
-                              } as SectionContainerBlock))
-                            }
-                            className="flex items-center gap-0.5 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
-                          >
-                            <RotateCcw size={9} />
-                            <span>{t('重置', 'Reset')}</span>
-                          </button>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between text-[10px] text-zinc-400">
-                          <span>{t('素材缩放 (Size)', 'Asset Scale')}</span>
-                          <span className="font-mono text-zinc-200">
-                            {Math.round((selectedRoot.badgeAssetScale ?? 1) * 100)}%
+                    {/* Selected Side Status and Styling */}
+                    <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800/80 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-zinc-400">
+                            {t('当前边线状态', 'Side State')}:
+                          </span>
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-zinc-850 text-blue-300 font-mono border border-zinc-750">
+                            {activeSideTab.toUpperCase()}
                           </span>
                         </div>
-                        <RangeSliderWithDefault
-                          min={0.5}
-                          max={2.5}
-                          step={0.05}
-                          value={selectedRoot.badgeAssetScale ?? 1}
-                          defaultValue={1}
-                          unit="x"
-                          lang={lang}
-                          onChange={(val) =>
-                            updateRootBlock(selectedRoot.id, (prev) => ({
-                              ...prev,
-                              badgeAssetScale: val,
-                            } as SectionContainerBlock))
-                          }
-                        />
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setSideState(activeSideTab, true)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition-all ${
+                              isSideActive(activeSideTab)
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'bg-zinc-900 border border-zinc-700/80 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            <Check size={10} />
+                            <span>{t('开启', 'Show')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSideState(activeSideTab, false)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition-all ${
+                              !isSideActive(activeSideTab)
+                                ? 'bg-red-600/80 text-white shadow-sm'
+                                : 'bg-zinc-900 border border-zinc-700/80 text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            <X size={10} />
+                            <span>{t('隐藏', 'Hide')}</span>
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <div className="flex justify-between text-[10px] text-zinc-400">
-                            <span>{t('左右位置 (X)', 'Position X')}</span>
-                            <span className="font-mono text-zinc-200">
-                              {(selectedRoot.badgeAssetX || 0) > 0
-                                ? `+${selectedRoot.badgeAssetX || 0}px`
-                                : `${selectedRoot.badgeAssetX || 0}px`}
-                            </span>
-                          </div>
-                          <RangeSliderWithDefault
-                            min={-30}
-                            max={30}
-                            step={1}
-                            value={selectedRoot.badgeAssetX || 0}
-                            defaultValue={0}
-                            unit="px"
-                            lang={lang}
-                            onChange={(val) =>
-                              updateRootBlock(selectedRoot.id, (prev) => ({
-                                ...prev,
-                                badgeAssetX: Math.round(val),
-                              } as SectionContainerBlock))
-                            }
+                      {/* Border Color, Width, Style */}
+                      <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-zinc-850 text-xs">
+                        {/* Color */}
+                        <div className="flex items-center gap-1 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 shrink-0" title={t('边线颜色', 'Border Color')}>
+                          <input
+                            type="color"
+                            value={b.borderColor || '#e4e4e7'}
+                            onChange={(e) => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, borderColor: e.target.value } as TableBlock))}
+                            className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent p-0"
                           />
+                          <span className="font-mono text-[10px] text-zinc-400">{b.borderColor || '#e4e4e7'}</span>
                         </div>
-                        <div>
-                          <div className="flex justify-between text-[10px] text-zinc-400">
-                            <span>{t('上下位置 (Y)', 'Position Y')}</span>
-                            <span className="font-mono text-zinc-200">
-                              {(selectedRoot.badgeAssetY || 0) > 0
-                                ? `+${selectedRoot.badgeAssetY || 0}px`
-                                : `${selectedRoot.badgeAssetY || 0}px`}
-                            </span>
-                          </div>
-                          <RangeSliderWithDefault
-                            min={-30}
-                            max={30}
-                            step={1}
-                            value={selectedRoot.badgeAssetY || 0}
-                            defaultValue={0}
-                            unit="px"
-                            lang={lang}
-                            onChange={(val) =>
-                              updateRootBlock(selectedRoot.id, (prev) => ({
-                                ...prev,
-                                badgeAssetY: Math.round(val),
-                              } as SectionContainerBlock))
-                            }
-                          />
+
+                        {/* Width */}
+                        <div className="flex items-center gap-0.5 bg-zinc-900 p-0.5 rounded border border-zinc-800" title={t('线条粗细', 'Border Width')}>
+                          {[1, 2, 3].map((w) => (
+                            <button
+                              key={w}
+                              type="button"
+                              onClick={() => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, borderWidth: w } as TableBlock))}
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                (b.borderWidth ?? 1) === w
+                                  ? 'bg-blue-600 text-white'
+                                  : 'text-zinc-400 hover:text-zinc-200'
+                              }`}
+                            >
+                              {w}p
+                            </button>
+                          ))}
                         </div>
+
+                        {/* Style */}
+                        <select
+                          value={b.borderStyle || 'solid'}
+                          onChange={(e) => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, borderStyle: e.target.value as any } as TableBlock))}
+                          className="py-0.5 px-1 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-200"
+                        >
+                          <option value="solid">{t('实线', 'Solid')}</option>
+                          <option value="dashed">{t('虚线', 'Dashed')}</option>
+                          <option value="dotted">{t('点线', 'Dotted')}</option>
+                        </select>
                       </div>
                     </div>
-                  )}
+                  </div>
 
-                  {/* Header Divider */}
-                  <div className="pt-1 border-t border-zinc-800">
-                    <label className="block text-[10px] text-zinc-400 mb-1">
-                      {t('标题底部分割线', 'Header Line')}
-                    </label>
-                    <div className="grid grid-cols-5 gap-1">
-                      {(
-                        [
-                          { id: 'solid', zh: '细线', en: 'Solid' },
-                          { id: 'thick_accent', zh: '粗线', en: 'Thick' },
-                          { id: 'dashed', zh: '虚线', en: 'Dash' },
-                          { id: 'double', zh: '双线', en: 'Double' },
-                          { id: 'none', zh: '无', en: 'None' },
-                        ] as const
-                      ).map((dv) => (
+                  {/* Rows & Columns Counter: 1 Sleek Compact Row, ZERO wrapping */}
+                  <div className="flex items-center justify-between bg-zinc-900/90 border border-zinc-800 rounded-xl px-3 py-2 text-xs">
+                    {/* Rows */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-zinc-400 font-medium">{t('行数', 'Rows')}</span>
+                      <span className="font-mono font-bold text-blue-400 text-xs min-w-[14px] text-center">{rowCount}</span>
+                      <div className="flex items-center gap-1">
                         <button
-                          key={dv.id}
                           type="button"
-                          onClick={() =>
-                            updateRootBlock(selectedRoot.id, (prev) => ({
-                              ...prev,
-                              headerDivider: dv.id,
-                            } as SectionContainerBlock))
-                          }
-                          className={`py-1 rounded text-[10px] font-semibold border ${
-                            (selectedRoot.headerDivider || 'solid') === dv.id
-                              ? 'bg-zinc-100 text-zinc-900 border-white'
-                              : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                          }`}
+                          onClick={removeRow}
+                          disabled={rowCount <= 1}
+                          title={t('删除末尾行', 'Remove Row')}
+                          className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-30 flex items-center justify-center transition-colors"
                         >
-                          {t(dv.zh, dv.en)}
+                          <Minus size={11} />
                         </button>
-                      ))}
+                        <button
+                          type="button"
+                          onClick={addRow}
+                          title={t('在末尾追加一行', 'Add Row')}
+                          className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-blue-400 flex items-center justify-center transition-colors"
+                        >
+                          <Plus size={11} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="h-4 w-px bg-zinc-800" />
+
+                    {/* Columns */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-zinc-400 font-medium">{t('列数', 'Cols')}</span>
+                      <span className="font-mono font-bold text-blue-400 text-xs min-w-[14px] text-center">{colCount}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={removeColumn}
+                          disabled={colCount <= 1}
+                          title={t('删除末尾列', 'Remove Column')}
+                          className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-30 flex items-center justify-center transition-colors"
+                        >
+                          <Minus size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={addColumn}
+                          title={t('在末尾追加一列', 'Add Column')}
+                          className="w-5 h-5 rounded bg-zinc-800 hover:bg-zinc-700 text-blue-400 flex items-center justify-center transition-colors"
+                        >
+                          <Plus size={11} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Header, Title & Layout Options */}
+                  <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-2.5 space-y-2">
+                    <div className="grid grid-cols-3 gap-1.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, hasHeader: !b.hasHeader } as TableBlock))}
+                        title={t('显示或隐藏第一行高亮表头', 'Toggle Header Row')}
+                        className={`py-1 px-1.5 rounded border text-[11px] font-semibold transition-colors ${
+                          b.hasHeader
+                            ? 'bg-blue-600/25 border-blue-500 text-blue-300'
+                            : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {t('表头行', 'Header')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, showTitle: !b.showTitle } as TableBlock))}
+                        title={t('显示或隐藏表格上方大标题', 'Toggle Table Title')}
+                        className={`py-1 px-1.5 rounded border text-[11px] font-semibold transition-colors ${
+                          b.showTitle
+                            ? 'bg-blue-600/25 border-blue-500 text-blue-300'
+                            : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {t('大标题', 'Title')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, zebraStriping: !b.zebraStriping } as TableBlock))}
+                        title={t('开启或关闭行间交替浅色背景 (斑马纹)', 'Toggle Zebra Striping')}
+                        className={`py-1 px-1.5 rounded border text-[11px] font-semibold transition-colors ${
+                          b.zebraStriping
+                            ? 'bg-blue-600/25 border-blue-500 text-blue-300'
+                            : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {t('斑马纹', 'Zebra')}
+                      </button>
+                    </div>
+
+                    {/* Title edit row if enabled */}
+                    {b.showTitle && (
+                      <div className="flex items-center gap-1.5 bg-zinc-950 p-1.5 rounded-lg border border-zinc-800">
+                        <input
+                          type="text"
+                          value={b.title || ''}
+                          onChange={(e) => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, title: e.target.value } as TableBlock))}
+                          placeholder={t('例如：战报汇总', 'e.g. Tournament Results')}
+                          className="flex-1 py-0.5 px-2 rounded bg-zinc-900 border border-zinc-700 text-xs text-zinc-200 focus:outline-none focus:border-blue-500"
+                        />
+                        <div className="flex items-center gap-0.5">
+                          {(['left', 'center', 'right'] as const).map((al) => (
+                            <button
+                              key={al}
+                              type="button"
+                              onClick={() => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, titleAlign: al } as TableBlock))}
+                              title={t(`大标题对齐：${al === 'left' ? '靠左' : al === 'center' ? '居中' : '靠右'}`, `Title Align: ${al}`)}
+                              className={`p-1 rounded text-xs transition-colors ${
+                                (b.titleAlign || 'center') === al ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                              }`}
+                            >
+                              {al === 'left' ? <AlignLeft size={11} /> : al === 'center' ? <AlignCenter size={11} /> : <AlignRight size={11} />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 1. Font Size (Dedicated clean row, ZERO overflow) */}
+                    <div className="flex items-center justify-between bg-zinc-950 px-2.5 py-1.5 rounded-lg border border-zinc-800 text-xs">
+                      <span className="text-[10px] text-zinc-400 font-medium">{t('字号大小', 'Font Size')}</span>
+                      <div className="flex items-center gap-1">
+                        {[10, 11, 12, 13, 14].map((sz) => (
+                          <button
+                            key={sz}
+                            type="button"
+                            onClick={() => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, fontSize: sz } as TableBlock))}
+                            title={t(`文字字号 ${sz}px`, `Font Size ${sz}px`)}
+                            className={`w-6 h-5 rounded text-[10px] font-bold border flex items-center justify-center transition-colors ${
+                              (b.fontSize || 12) === sz
+                                ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                                : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                            }`}
+                          >
+                            {sz}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 2. Text Alignment & Cell Padding (Clean 50/50 split row, ZERO overflow) */}
+                    <div className="flex items-center justify-between bg-zinc-950 px-2.5 py-1.5 rounded-lg border border-zinc-800 text-xs">
+                      {/* Alignment */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-zinc-400 font-medium">{t('对齐', 'Align')}</span>
+                        <div className="flex items-center gap-0.5 bg-zinc-900 p-0.5 rounded border border-zinc-800">
+                          {(['left', 'center', 'right'] as const).map((al) => (
+                            <button
+                              key={al}
+                              type="button"
+                              onClick={() => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, textAlign: al } as TableBlock))}
+                              title={t(`单元格文字对齐：${al === 'left' ? '靠左' : al === 'center' ? '居中' : '靠右'}`, `Text Align: ${al}`)}
+                              className={`w-5 h-5 rounded text-xs flex items-center justify-center transition-colors ${
+                                (b.textAlign || 'center') === al
+                                  ? 'bg-blue-600 text-white font-bold shadow-sm'
+                                  : 'text-zinc-400 hover:text-zinc-200'
+                              }`}
+                            >
+                              {al === 'left' ? <AlignLeft size={11} /> : al === 'center' ? <AlignCenter size={11} /> : <AlignRight size={11} />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="h-4 w-px bg-zinc-800 mx-1" />
+
+                      {/* Cell Padding */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-zinc-400 font-medium">{t('边距', 'Padding')}</span>
+                        <div className="flex items-center gap-0.5 bg-zinc-900 p-0.5 rounded border border-zinc-800">
+                          {(['compact', 'normal', 'relaxed'] as const).map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => updateContentBlock(selectedRoot.id, b.id, (prev) => ({ ...prev, cellPadding: p } as TableBlock))}
+                              title={t(`内边距：${p === 'compact' ? '紧凑 (S)' : p === 'normal' ? '标准 (M)' : '宽松 (L)'}`, `Padding: ${p}`)}
+                              className={`w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center transition-colors ${
+                                (b.cellPadding || 'normal') === p
+                                  ? 'bg-blue-600 text-white shadow-sm'
+                                  : 'text-zinc-400 hover:text-zinc-200'
+                              }`}
+                            >
+                              {p === 'compact' ? 'S' : p === 'normal' ? 'M' : 'L'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
+              );
+            })()}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
-                {/* 2. Section Bullet Icon (■) */}
-                <div className="bg-zinc-900/90 border border-zinc-700/70 rounded p-2.5 space-y-2">
+        {/* ========================================================= */}
+        {/* 3. PHOTO & FRAME INSPECTOR (ELEMENT LEVEL)                */}
+        {/* ========================================================= */}
+        {(() => {
+          const isCollapsed = isToolCollapsed('frame');
+
+          if (!selectedImageSlot) {
+            return (
+              <div className="bg-zinc-900/40 border border-dashed border-zinc-750 rounded-xl p-3 space-y-2 opacity-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+                    <ImageIcon size={13} className="text-zinc-500" />
+                    <span>{t('图片与画框设置', 'Photo & Frame Settings')}</span>
+                  </div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
+                    {t('灰显 · 未选中照片', 'Inactive · No Photo')}
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-500 leading-relaxed">
+                  {t('在画布中点击选中任意照片，即可在此调节尺寸比例、装饰画框、自由裁剪与旋转。', 'Click any photo on canvas to edit frame style, aspect ratio, crop and zoom.')}
+                </p>
+                {(() => {
+                  const candidateImg = findFirstImageInBlock(effectiveParentBlock);
+                  if (!candidateImg) return null;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => selectImageSlot(candidateImg.id)}
+                      className="w-full py-1.5 px-2 rounded bg-zinc-800 hover:bg-zinc-700 text-blue-400 border border-zinc-700 text-xs flex items-center justify-center gap-1.5 transition-colors font-medium shadow-sm"
+                    >
+                      <Sparkles size={12} />
+                      <span>{t('👉 选中本组件的照片进行编辑', 'Select photo in this component')}</span>
+                    </button>
+                  );
+                })()}
+              </div>
+            );
+          }
+
+          return (
+            <div className="bg-zinc-850 border-2 border-blue-500/80 shadow-md ring-1 ring-blue-500/30 rounded-xl p-3 space-y-3">
+              <div className="flex items-center justify-between border-b border-zinc-700/60 pb-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-white truncate max-w-[210px]">
+                  <ImageIcon size={14} className="text-blue-400 shrink-0" />
+                  <span className="truncate">{t('图片与画框设置', 'Photo & Frame')}</span>
+                  <span className="text-[10px] text-zinc-400 font-normal truncate">
+                    ({selectedImageSlot.label || 'IMAGE'})
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold">
+                    {t('当前编辑照片', 'Active Photo')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleTool('frame')}
+                    className="p-1 rounded text-zinc-400 hover:text-white transition-colors"
+                    title={isCollapsed ? t('展开照片工具', 'Expand') : t('折叠照片工具', 'Collapse')}
+                  >
+                    {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              {!isCollapsed && (
+                <div className="space-y-3">
+            {/* Photo Layout Presets & Add Photo (Displayed when clicking the photo!) */}
+            {effectiveParentBlock && effectiveParentBlock.type === 'dated_event_block' && (() => {
+              const b = effectiveParentBlock as DatedEventBlock;
+              const photoCount = b.images.length;
+              const availablePresets = getPresetsForCount(photoCount);
+              let effectivePreset: PhotoLayoutPreset = b.layoutPreset || 'auto';
+              if (effectivePreset === 'auto') {
+                if (photoCount === 6) {
+                  effectivePreset = b.gridColumns === 4 ? '4_plus_2' : b.gridColumns === 2 ? '2x3' : '3x2';
+                } else if (photoCount === 4) {
+                  effectivePreset = b.fitLastToMargin || b.gridColumns === 3 ? '3_plus_1' : b.gridColumns === 2 ? '2x2' : '3_plus_1';
+                } else if (photoCount === 3) {
+                  effectivePreset = b.fitLastToMargin || b.gridColumns === 2 ? '2_plus_1' : '3_cols';
+                } else if (photoCount === 5) {
+                  effectivePreset = '3_plus_2';
+                } else if (availablePresets[0]) {
+                  effectivePreset = availablePresets[0].id;
+                }
+              }
+
+              const handleAddPhotoFromSlot = () => {
+                if (!effectiveRootBlock) return;
+                updateContentBlock(effectiveRootBlock.id, b.id, (prev) => {
+                  const cur = prev as DatedEventBlock;
+                  const nextImgs = [
+                    ...cur.images,
+                    createImageSlot(
+                      selectedImageSlot.aspectRatio || cur.imageAspectRatio || '4:3',
+                      `PHOTO ${cur.images.length + 1}`,
+                      null
+                    ),
+                  ];
+                  let nextPreset = cur.layoutPreset;
+                  if (nextImgs.length === 4 && (!nextPreset || nextPreset === 'auto')) {
+                    nextPreset = '2x2';
+                  } else if (nextImgs.length === 6 && (!nextPreset || nextPreset === 'auto')) {
+                    nextPreset = '3x2';
+                  }
+                  return {
+                    ...cur,
+                    images: nextImgs,
+                    showImages: true,
+                    layoutPreset: nextPreset,
+                    fitLastToMargin: true,
+                  };
+                });
+              };
+
+              return (
+                <div className="bg-zinc-950/80 p-2.5 rounded-lg border border-zinc-800 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-zinc-200">
-                      {t('要点小符号 (■) 样式', 'Bullet Icon (■)')}
-                    </span>
-                    <span className="text-[10px] font-mono text-zinc-400">
-                      {selectedRoot.bulletSize || 8}px
-                    </span>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                      <LayoutGrid size={13} className="text-blue-400" />
+                      <span>{t('配图排版方案预设', 'Photo Layout Presets')}</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 bg-zinc-800 text-zinc-300 rounded border border-zinc-700">
+                        {photoCount} {t('图', 'pics')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddPhotoFromSlot}
+                      className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] font-semibold transition"
+                    >
+                      <Plus size={11} />
+                      <span>{t('添加图片', 'Add Photo')}</span>
+                    </button>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-1">
-                    {(
-                      [
-                        { id: 'square', zh: '■ 方块', en: '■ Box' },
-                        { id: 'circle', zh: '● 圆点', en: '● Dot' },
-                        { id: 'diamond', zh: '◆ 菱形', en: '◆ Gem' },
-                        { id: 'ring', zh: '◎ 圆环', en: '◎ Ring' },
-                        { id: 'bar', zh: '▎ 竖条', en: '▎ Bar' },
-                        { id: 'arrow', zh: '▶ 箭头', en: '▶ Arrow' },
-                        { id: 'star', zh: '★ 星标', en: '★ Star' },
-                        { id: 'custom', zh: '★ 贴图', en: '★ PNG' },
-                      ] as { id: BulletShapeType; zh: string; en: string }[]
-                    ).map((bs) => (
+                  {availablePresets.length > 0 && (
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {availablePresets.map((preset) => {
+                        const isCur = effectivePreset === preset.id;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => {
+                              if (!effectiveRootBlock) return;
+                              let targetCols: 1 | 2 | 3 | 4 = 3;
+                              let fitMargin = false;
+                              if (preset.id === '1_col') targetCols = 1;
+                              else if (preset.id === '2_cols' || preset.id === '2x2' || preset.id === '2x3' || preset.id === '2_plus_1' || preset.id === '2_plus_3') targetCols = 2;
+                              else if (preset.id === '3_cols' || preset.id === '3x2' || preset.id === '3_plus_1' || preset.id === '3_plus_2') targetCols = 3;
+                              else if (preset.id === '4_cols' || preset.id === '4_plus_2' || preset.id === '4_plus_1') targetCols = 4;
+                              if (preset.rows.length > 1 && preset.rows[preset.rows.length - 1] < preset.rows[0]) {
+                                fitMargin = true;
+                              }
+                              updateContentBlock(effectiveRootBlock.id, b.id, (prev) => ({
+                                ...prev,
+                                layoutPreset: preset.id,
+                                gridColumns: targetCols,
+                                fitLastToMargin: fitMargin,
+                                showImages: true,
+                              } as DatedEventBlock));
+                            }}
+                            className={`p-1.5 rounded-md border text-left flex flex-col justify-between transition-all duration-150 active:scale-95 hover:scale-[1.02] ${
+                              isCur
+                                ? 'bg-blue-950/70 border-blue-500 shadow-md ring-1 ring-blue-500/50 text-white'
+                                : 'bg-zinc-900 border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800/80 text-zinc-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full mb-1">
+                              <span className="font-bold text-[10.5px] truncate">{t(preset.labelZh, preset.labelEn)}</span>
+                              {preset.isRecommended && (
+                                <span className="text-[8px] bg-blue-500/20 text-blue-300 px-1 py-0.2 rounded border border-blue-500/30">
+                                  {t('推荐', 'Fit')}
+                                </span>
+                              )}
+                            </div>
+                            <div className="w-full bg-zinc-950 p-1 rounded border border-zinc-800/80 space-y-0.5">
+                              {preset.rows.map((rowCols, rIdx) => (
+                                <div key={rIdx} className="flex gap-0.5 w-full">
+                                  {Array.from({ length: rowCols }).map((_, cIdx) => (
+                                    <div
+                                      key={cIdx}
+                                      className={`h-1.5 rounded-xs flex-1 ${isCur ? 'bg-blue-400' : 'bg-zinc-600'}`}
+                                    />
+                                  ))}
+                                </div>
+                              ))}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Batch Sync Toolbar (Applies frame settings to all frames) */}
+            <div className="bg-zinc-950/90 p-2 rounded-lg border border-zinc-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-zinc-200 select-none">
+                  <input
+                    type="checkbox"
+                    checked={syncAllFramesInBlock}
+                    onChange={(e) => setSyncAllFramesInBlock(e.target.checked)}
+                    className="rounded accent-blue-500"
+                  />
+                  <span>{t('同步修改本组所有画框', 'Sync style to all photos in block')}</span>
+                </label>
+              </div>
+              <div className="flex items-center gap-1 pt-1 border-t border-zinc-800/80 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyFrameSettingsToGroup(selectedImageSlot.id, 'block', selectedImageSlot);
+                  }}
+                  className="flex-1 py-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 text-blue-300 hover:text-blue-200 border border-zinc-700/80 rounded font-medium transition text-center"
+                  title={t('应用当前选中的画框风格与比例到本模块所有图片', 'Apply frame style to all images in block')}
+                >
+                  {t('应用到本模块所有画框', 'Apply to Block')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyFrameSettingsToGroup(selectedImageSlot.id, 'container', selectedImageSlot);
+                  }}
+                  className="flex-1 py-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700/80 rounded font-medium transition text-center"
+                  title={t('应用当前选中的画框风格与比例到本容器所有图片', 'Apply frame style to all images in container')}
+                >
+                  {t('应用到本容器', 'To Container')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyFrameSettingsToGroup(selectedImageSlot.id, 'doc', selectedImageSlot);
+                  }}
+                  className="py-1 px-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700/80 rounded font-medium transition text-center"
+                  title={t('应用当前选中的画框风格与比例到全简报所有图片', 'Apply frame style to all images in bulletin')}
+                >
+                  {t('全简报', 'All')}
+                </button>
+              </div>
+            </div>
+
+            {/* 3 Tab Switcher */}
+            <div className="grid grid-cols-3 gap-1 bg-zinc-950 p-1 rounded-md border border-zinc-800 text-[11px] font-bold">
+              <button
+                type="button"
+                onClick={() => setImageSlotTab('size')}
+                className={`py-1 rounded text-center transition-colors ${
+                  imageSlotTab === 'size'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {t('尺寸比例', 'Size & Ratio')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageSlotTab('frame')}
+                className={`py-1 rounded text-center transition-colors ${
+                  imageSlotTab === 'frame'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {t('画框预设', 'Frame Style')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageSlotTab('crop')}
+                className={`py-1 rounded text-center transition-colors ${
+                  imageSlotTab === 'crop'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {t('画面调节', 'Crop & Pan')}
+              </button>
+            </div>
+
+            {/* TAB 1: SIZE & RATIO */}
+            {imageSlotTab === 'size' && (
+              <div className="space-y-3">
+                {/* Upload & Clear Actions */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleUploadForSelectedSlot}
+                  className="hidden"
+                />
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 py-1.5 px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Upload size={12} />
+                    <span>
+                      {selectedImageSlot.url
+                        ? t('更换图片', 'Replace Photo')
+                        : t('上传图片', 'Upload Photo')}
+                    </span>
+                  </button>
+                  {selectedImageSlot.url && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateImageSlotById(selectedImageSlot.id, {
+                          url: null,
+                          zoom: 1,
+                          focalPoint: { x: 50, y: 50 },
+                        })
+                      }
+                      className="px-2.5 py-1.5 bg-zinc-900 hover:bg-red-950/60 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-xs transition-colors"
+                    >
+                      {t('清除', 'Clear')}
+                    </button>
+                  )}
+                </div>
+
+                {/* Aspect Ratio */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-semibold text-zinc-400">
+                      {t('画幅比例', 'Aspect Ratio')}
+                    </label>
+                    {syncAllFramesInBlock && (
+                      <span className="text-[9px] text-blue-400 font-medium">
+                        {t('同步应用于本组', 'Syncing to block')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-6 gap-0.5 bg-zinc-950 p-0.5 rounded border border-zinc-800">
+                    {ASPECT_RATIOS.map((ratio) => (
                       <button
-                        key={bs.id}
+                        key={ratio}
                         type="button"
                         onClick={() => {
-                          if (bs.id === 'custom' && !selectedRoot.bulletCustomUrl) {
-                            sectionBulletAssetInputRef.current?.click();
+                          if (ratio === 'free') {
+                            updateSelectedSlotWithSync({
+                              aspectRatio: 'free',
+                              frameWidthMode: 'custom_px',
+                              frameCustomWidthPx:
+                                selectedImageSlot.frameCustomWidthPx || 320,
+                            });
+                          } else {
+                            updateSelectedSlotWithSync({
+                              aspectRatio: ratio,
+                              frameHeightMode: 'aspect',
+                            });
                           }
-                          updateRootBlock(selectedRoot.id, (prev) => ({
-                            ...prev,
-                            bulletShape: bs.id,
-                            bulletCustomUrl:
-                              bs.id === 'custom'
-                                ? (prev as SectionContainerBlock).bulletCustomUrl
-                                : null,
-                          } as SectionContainerBlock));
                         }}
-                        className={`py-1 rounded text-[10px] font-semibold border ${
-                          (selectedRoot.bulletShape || 'square') === bs.id
-                            ? 'bg-zinc-100 text-zinc-900 border-white'
-                            : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:text-zinc-200'
+                        className={`py-1 rounded text-[10px] font-bold transition-colors ${
+                          selectedImageSlot.aspectRatio === ratio
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-zinc-400 hover:text-zinc-200'
                         }`}
                       >
-                        {t(bs.zh, bs.en)}
+                        {ratio === 'free' ? t('自由', 'Free') : ratio}
                       </button>
                     ))}
                   </div>
+                </div>
 
-                  {/* Size + Upload Row */}
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <RangeSliderWithDefault
-                      min={6}
-                      max={14}
-                      step={1}
-                      value={selectedRoot.bulletSize || 8}
-                      defaultValue={8}
-                      unit="px"
-                      lang={lang}
-                      onChange={(val) =>
-                        updateRootBlock(selectedRoot.id, (prev) => ({
-                          ...prev,
-                          bulletSize: Math.round(val),
-                        } as SectionContainerBlock))
-                      }
-                    />
-                    <input
-                      ref={sectionBulletAssetInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleUploadSectionBulletAsset}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => sectionBulletAssetInputRef.current?.click()}
-                      className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 rounded text-[10px] font-semibold flex items-center gap-1 shrink-0"
-                    >
-                      <Upload size={10} />
-                      <span>
-                        {selectedRoot.bulletCustomUrl
-                          ? t('换图标', 'Change')
-                          : t('上传图标', 'Upload')}
-                      </span>
-                    </button>
-                    {selectedRoot.bulletCustomUrl && (
+                {/* Picture Frame Size & Alignment */}
+                <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-zinc-200">
+                      {t('画框尺寸与对齐', 'Frame Size & Alignment')}
+                    </span>
+                    {((selectedImageSlot.frameWidthMode && selectedImageSlot.frameWidthMode !== 'full') ||
+                      selectedImageSlot.frameHeightMode === 'custom_px' ||
+                      (selectedImageSlot.frameAlign && selectedImageSlot.frameAlign !== 'center')) && (
                       <button
                         type="button"
                         onClick={() =>
-                          updateRootBlock(selectedRoot.id, (prev) => ({
-                            ...prev,
-                            bulletCustomUrl: null,
-                            bulletAssetScale: 1,
-                            bulletAssetX: 0,
-                            bulletAssetY: 0,
-                            bulletShape: 'square',
-                          } as SectionContainerBlock))
+                          updateSelectedSlotWithSync({
+                            frameWidthMode: 'full',
+                            frameHeightMode: 'aspect',
+                            frameAlign: 'center',
+                            frameCustomWidthPx: undefined,
+                            frameCustomHeightPx: undefined,
+                          })
                         }
-                        className="px-1.5 py-1 bg-zinc-950 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-[10px]"
+                        className="flex items-center gap-1 text-[9px] text-amber-300 hover:text-amber-200 font-semibold"
                       >
-                        ×
+                        <RotateCcw size={9} />
+                        <span>{t('重置尺寸', 'Reset')}</span>
                       </button>
                     )}
                   </div>
 
-                  {/* Custom Bullet Asset Size & Position Controls */}
-                  {selectedRoot.bulletCustomUrl && (
-                    <div className="bg-zinc-950/90 border border-amber-500/30 rounded p-2 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-amber-300">
-                          {t(
-                            '自定义要点符号 · 大小与位置',
-                            'Custom Bullet Asset · Size & Position'
-                          )}
-                        </span>
-                        {((selectedRoot.bulletAssetScale ?? 1) !== 1 ||
-                          (selectedRoot.bulletAssetX || 0) !== 0 ||
-                          (selectedRoot.bulletAssetY || 0) !== 0) && (
+                  {/* Frame Width Modes */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('画框宽度', 'Frame Width')}
+                    </label>
+                    <div className="grid grid-cols-4 gap-0.5 bg-zinc-950 p-0.5 rounded border border-zinc-800">
+                      {(
+                        [
+                          { mode: 'full', label: '100%' },
+                          { mode: '75%', label: '75%' },
+                          { mode: '50%', label: '50%' },
+                          { mode: 'custom_px', label: t('自定', 'Custom') },
+                        ] as const
+                      ).map((item) => {
+                        const isSelectedMode =
+                          (selectedImageSlot.frameWidthMode || 'full') === item.mode;
+                        return (
                           <button
+                            key={item.mode}
+                            type="button"
+                            onClick={() => {
+                              if (item.mode === 'custom_px') {
+                                updateSelectedSlotWithSync({
+                                  frameWidthMode: 'custom_px',
+                                  frameCustomWidthPx:
+                                    selectedImageSlot.frameCustomWidthPx || 320,
+                                  aspectRatio: 'free',
+                                });
+                              } else {
+                                updateSelectedSlotWithSync({
+                                  frameWidthMode: item.mode,
+                                  frameCustomWidthPx: selectedImageSlot.frameCustomWidthPx,
+                                });
+                              }
+                            }}
+                            className={`py-1 rounded text-[10px] font-bold transition-colors ${
+                              isSelectedMode
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-zinc-400 hover:text-zinc-200'
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {selectedImageSlot.frameWidthMode === 'custom_px' && (
+                      <div className="mt-2 flex items-center gap-2 bg-zinc-950 p-1.5 rounded border border-zinc-800 text-xs">
+                        <span className="text-[10px] text-zinc-400 shrink-0">W:</span>
+                        <input
+                          type="range"
+                          min={80}
+                          max={800}
+                          step={10}
+                          value={selectedImageSlot.frameCustomWidthPx || 320}
+                          onChange={(e) =>
+                            updateSelectedSlotWithSync({
+                              frameWidthMode: 'custom_px',
+                              frameCustomWidthPx: Number(e.target.value),
+                              aspectRatio: 'free',
+                            })
+                          }
+                          className="flex-1 h-1.5 bg-zinc-800 rounded accent-blue-500 cursor-pointer"
+                        />
+                        <span className="font-mono text-[10px] text-zinc-200 min-w-[40px] text-right">
+                          {selectedImageSlot.frameCustomWidthPx || 320}px
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Frame Height Mode */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('画框高度', 'Frame Height')}
+                    </label>
+                    <div className="grid grid-cols-2 gap-0.5 bg-zinc-950 p-0.5 rounded border border-zinc-800">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateSelectedSlotWithSync({
+                            frameHeightMode: 'aspect',
+                          })
+                        }
+                        className={`py-1 rounded text-[10px] font-bold transition-colors ${
+                          (selectedImageSlot.frameHeightMode || 'aspect') === 'aspect'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {t('画幅比例联动', 'By Ratio')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateSelectedSlotWithSync({
+                            frameHeightMode: 'custom_px',
+                            frameCustomHeightPx: selectedImageSlot.frameCustomHeightPx || 200,
+                            aspectRatio: 'free',
+                          })
+                        }
+                        className={`py-1 rounded text-[10px] font-bold transition-colors ${
+                          selectedImageSlot.frameHeightMode === 'custom_px'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {t('固定像素高度', 'Fixed (px)')}
+                      </button>
+                    </div>
+
+                    {selectedImageSlot.frameHeightMode === 'custom_px' && (
+                      <div className="mt-2 flex items-center gap-2 bg-zinc-950 p-1.5 rounded border border-zinc-800 text-xs">
+                        <span className="text-[10px] text-zinc-400 shrink-0">H:</span>
+                        <input
+                          type="range"
+                          min={60}
+                          max={600}
+                          step={10}
+                          value={selectedImageSlot.frameCustomHeightPx || 200}
+                          onChange={(e) =>
+                            updateSelectedSlotWithSync({
+                              frameHeightMode: 'custom_px',
+                              frameCustomHeightPx: Number(e.target.value),
+                              aspectRatio: 'free',
+                            })
+                          }
+                          className="flex-1 h-1.5 bg-zinc-800 rounded accent-blue-500 cursor-pointer"
+                        />
+                        <span className="font-mono text-[10px] text-zinc-200 min-w-[40px] text-right">
+                          {selectedImageSlot.frameCustomHeightPx || 200}px
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Frame Alignment */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                      {t('画框对齐方式', 'Alignment')}
+                    </label>
+                    <div className="grid grid-cols-3 gap-1">
+                      {(
+                        [
+                          { align: 'left', icon: AlignLeft, label: t('居左', 'Left') },
+                          { align: 'center', icon: AlignCenter, label: t('居中', 'Center') },
+                          { align: 'right', icon: AlignRight, label: t('居右', 'Right') },
+                        ] as const
+                      ).map((item) => {
+                        const isSelectedAlign =
+                          (selectedImageSlot.frameAlign || 'center') === item.align;
+                        const IconComp = item.icon;
+                        return (
+                          <button
+                            key={item.align}
                             type="button"
                             onClick={() =>
-                              updateRootBlock(selectedRoot.id, (prev) => ({
-                                ...prev,
-                                bulletAssetScale: 1,
-                                bulletAssetX: 0,
-                                bulletAssetY: 0,
-                              } as SectionContainerBlock))
+                              updateImageSlotById(selectedImageSlot.id, {
+                                frameAlign: item.align,
+                              })
                             }
-                            className="flex items-center gap-0.5 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
+                            className={`py-1 flex items-center justify-center gap-1 rounded text-[10px] font-bold border transition-colors ${
+                              isSelectedAlign
+                                ? 'bg-blue-600 border-blue-400 text-white'
+                                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                            }`}
                           >
-                            <RotateCcw size={9} />
-                            <span>{t('重置', 'Reset')}</span>
+                            <IconComp size={11} />
+                            <span>{item.label}</span>
                           </button>
-                        )}
-                      </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-                      <div>
-                        <div className="flex justify-between text-[10px] text-zinc-400">
-                          <span>{t('图标缩放 (Size)', 'Icon Scale')}</span>
-                          <span className="font-mono text-zinc-200">
-                            {Math.round((selectedRoot.bulletAssetScale ?? 1) * 100)}%
-                          </span>
-                        </div>
-                        <RangeSliderWithDefault
-                          min={0.5}
-                          max={2.5}
-                          step={0.05}
-                          value={selectedRoot.bulletAssetScale ?? 1}
-                          defaultValue={1}
-                          unit="x"
-                          lang={lang}
-                          onChange={(val) =>
-                            updateRootBlock(selectedRoot.id, (prev) => ({
-                              ...prev,
-                              bulletAssetScale: val,
-                            } as SectionContainerBlock))
-                          }
-                        />
-                      </div>
+            {/* TAB 2: FRAME PRESETS & STYLING */}
+            {imageSlotTab === 'frame' && (
+              <div className="space-y-3">
+                {/* Quick Frame Presets */}
+                <div>
+                  <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                    {t('画框预设风格', 'Frame Presets')}
+                  </label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(
+                      [
+                        {
+                          zh: '无框',
+                          en: 'None',
+                          patch: {
+                            frameRadius: 4,
+                            frameBorderWidth: 0,
+                            frameMatPadding: 0,
+                            frameShadow: 'none' as const,
+                          },
+                        },
+                        {
+                          zh: '圆角',
+                          en: 'Rounded',
+                          patch: {
+                            frameRadius: 12,
+                            frameBorderWidth: 0,
+                            frameMatPadding: 0,
+                            frameShadow: 'sm' as const,
+                          },
+                        },
+                        {
+                          zh: '拍立得',
+                          en: 'Polaroid',
+                          patch: {
+                            frameRadius: 8,
+                            frameBorderWidth: 1,
+                            frameBorderColor: '#d4d4d8',
+                            frameBorderStyle: 'solid' as const,
+                            frameMatPadding: 6,
+                            frameMatColor: '#ffffff',
+                            frameShadow: 'md' as const,
+                          },
+                        },
+                        {
+                          zh: '邮票虚线',
+                          en: 'Stamp',
+                          patch: {
+                            frameRadius: 6,
+                            frameBorderWidth: 2,
+                            frameBorderColor: '#71717a',
+                            frameBorderStyle: 'dashed' as const,
+                            frameMatPadding: 5,
+                            frameMatColor: '#fafafa',
+                            frameShadow: 'sm' as const,
+                          },
+                        },
+                        {
+                          zh: '古典双线',
+                          en: 'Double',
+                          patch: {
+                            frameRadius: 4,
+                            frameBorderWidth: 4,
+                            frameBorderColor: '#52525b',
+                            frameBorderStyle: 'double' as const,
+                            frameMatPadding: 4,
+                            frameMatColor: '#ffffff',
+                            frameShadow: 'none' as const,
+                          },
+                        },
+                        {
+                          zh: '正圆画框',
+                          en: 'Circle',
+                          patch: {
+                            frameRadius: 999,
+                            frameBorderWidth: 3,
+                            frameBorderColor: '#ffffff',
+                            frameBorderStyle: 'solid' as const,
+                            frameMatPadding: 0,
+                            frameShadow: 'md' as const,
+                          },
+                        },
+                      ]
+                    ).map((preset) => (
+                      <button
+                        key={preset.en}
+                        type="button"
+                        onClick={() =>
+                          updateSelectedSlotWithSync(preset.patch)
+                        }
+                        className="py-1 px-1.5 rounded text-[10px] font-semibold bg-zinc-950 hover:bg-zinc-700 text-zinc-200 border border-zinc-800 transition-colors"
+                      >
+                        {t(preset.zh, preset.en)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
+                {/* Collapsible Details */}
+                <div className="border border-zinc-700/60 rounded-md bg-zinc-950/40 p-2 space-y-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsFrameDetailsOpen(!isFrameDetailsOpen)}
+                    className="w-full flex items-center justify-between text-[11px] font-semibold text-zinc-300 hover:text-white transition-colors"
+                  >
+                    <span>{t('自定义细节调节 (圆角/边框/阴影)', 'Custom Radius, Border & Shadow')}</span>
+                    <span className="text-[10px] text-zinc-500 font-normal">
+                      {isFrameDetailsOpen ? '▾' : '▸'}
+                    </span>
+                  </button>
+
+                  {isFrameDetailsOpen && (
+                    <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
+                      {/* Radius & Mat Padding */}
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <div className="flex justify-between text-[10px] text-zinc-400">
-                            <span>{t('左右微调 (X)', 'Position X')}</span>
-                            <span className="font-mono text-zinc-200">
-                              {(selectedRoot.bulletAssetX || 0) > 0
-                                ? `+${selectedRoot.bulletAssetX || 0}px`
-                                : `${selectedRoot.bulletAssetX || 0}px`}
-                            </span>
+                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                            {t('圆角', 'Radius')}
+                          </label>
+                          <div className="grid grid-cols-5 gap-0.5">
+                            {[0, 6, 12, 20, 999].map((r) => (
+                              <button
+                                key={r}
+                                type="button"
+                                onClick={() =>
+                                  updateSelectedSlotWithSync({
+                                    frameRadius: r,
+                                  })
+                                }
+                                className={`py-1 rounded text-[10px] font-bold border ${
+                                  (selectedImageSlot.frameRadius ?? 4) === r
+                                    ? 'bg-zinc-100 text-zinc-900 border-white'
+                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                                }`}
+                              >
+                                {r === 999 ? '●' : r}
+                              </button>
+                            ))}
                           </div>
-                          <RangeSliderWithDefault
-                            min={-15}
-                            max={15}
-                            step={1}
-                            value={selectedRoot.bulletAssetX || 0}
-                            defaultValue={0}
-                            unit="px"
-                            lang={lang}
-                            onChange={(val) =>
-                              updateRootBlock(selectedRoot.id, (prev) => ({
-                                ...prev,
-                                bulletAssetX: Math.round(val),
-                              } as SectionContainerBlock))
-                            }
-                          />
                         </div>
                         <div>
-                          <div className="flex justify-between text-[10px] text-zinc-400">
-                            <span>{t('上下微调 (Y)', 'Position Y')}</span>
-                            <span className="font-mono text-zinc-200">
-                              {(selectedRoot.bulletAssetY || 0) > 0
-                                ? `+${selectedRoot.bulletAssetY || 0}px`
-                                : `${selectedRoot.bulletAssetY || 0}px`}
-                            </span>
+                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                            {t('白边留白', 'Mat Pad')}
+                          </label>
+                          <div className="grid grid-cols-4 gap-0.5">
+                            {[0, 4, 8, 12].map((mp) => (
+                              <button
+                                key={mp}
+                                type="button"
+                                onClick={() =>
+                                  updateSelectedSlotWithSync({
+                                    frameMatPadding: mp,
+                                  })
+                                }
+                                className={`py-1 rounded text-[10px] font-bold border ${
+                                  (selectedImageSlot.frameMatPadding ?? 0) === mp
+                                    ? 'bg-zinc-100 text-zinc-900 border-white'
+                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                                }`}
+                              >
+                                {mp}
+                              </button>
+                            ))}
                           </div>
-                          <RangeSliderWithDefault
-                            min={-15}
-                            max={15}
-                            step={1}
-                            value={selectedRoot.bulletAssetY || 0}
-                            defaultValue={0}
-                            unit="px"
-                            lang={lang}
-                            onChange={(val) =>
-                              updateRootBlock(selectedRoot.id, (prev) => ({
-                                ...prev,
-                                bulletAssetY: Math.round(val),
-                              } as SectionContainerBlock))
-                            }
-                          />
+                        </div>
+                      </div>
+
+                      {/* Border Width, Color & Shadow */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                            {t('外框粗细与颜色', 'Border')}
+                          </label>
+                          <div className="flex items-center gap-1">
+                            {[0, 1, 2, 4].map((bw) => (
+                              <button
+                                key={bw}
+                                type="button"
+                                onClick={() =>
+                                  updateSelectedSlotWithSync({
+                                    frameBorderWidth: bw,
+                                  })
+                                }
+                                className={`flex-1 py-1 rounded text-[10px] font-bold border ${
+                                  (selectedImageSlot.frameBorderWidth ?? 0) === bw
+                                    ? 'bg-zinc-100 text-zinc-900 border-white'
+                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                                }`}
+                              >
+                                {bw}
+                              </button>
+                            ))}
+                            <input
+                              type="color"
+                              value={selectedImageSlot.frameBorderColor || '#d4d4d8'}
+                              onChange={(e) =>
+                                updateSelectedSlotWithSync({
+                                  frameBorderColor: e.target.value,
+                                })
+                              }
+                              className="w-5 h-5 bg-transparent border-0 cursor-pointer shrink-0"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                            {t('阴影效果', 'Shadow')}
+                          </label>
+                          <div className="grid grid-cols-4 gap-1">
+                            {(
+                              [
+                                { id: 'none', zh: '无', en: '0' },
+                                { id: 'sm', zh: '浅', en: 'S' },
+                                { id: 'md', zh: '深', en: 'M' },
+                                { id: 'hard', zh: '立体', en: '3D' },
+                              ] as const
+                            ).map((sh) => (
+                              <button
+                                key={sh.id}
+                                type="button"
+                                onClick={() =>
+                                  updateSelectedSlotWithSync({
+                                    frameShadow: sh.id,
+                                  })
+                                }
+                                className={`py-1 rounded text-[10px] font-semibold border ${
+                                  (selectedImageSlot.frameShadow || 'none') === sh.id
+                                    ? 'bg-zinc-100 text-zinc-900 border-white'
+                                    : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                                }`}
+                              >
+                                {t(sh.zh, sh.en)}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -4299,96 +5550,153 @@ export const RightInspector: React.FC = () => {
               </div>
             )}
 
-            {/* TAB 3: CONTAINER BACKGROUND, BORDER & STICKER */}
-            {containerTab === 'bg' && (
-              <div className="space-y-3 pt-0.5">
-                {/* Pattern */}
-                <div className="bg-zinc-900/90 border border-zinc-700/70 rounded p-2.5 space-y-2">
-                  <label className="block text-[10px] font-semibold text-zinc-400">
-                    {t('背景纹理', 'Background Pattern')}
-                  </label>
-                  <div className="grid grid-cols-5 gap-1">
-                    {(
-                      [
-                        { id: 'solid', zh: '纯色', en: 'Solid' },
-                        { id: 'gradient', zh: '渐变', en: 'Grad' },
-                        { id: 'dots', zh: '波点', en: 'Dots' },
-                        { id: 'grid', zh: '网格', en: 'Grid' },
-                        { id: 'stripes', zh: '斜纹', en: 'Stripe' },
-                      ] as { id: ContainerPatternType; zh: string; en: string }[]
-                    ).map((pt) => (
+            {/* TAB 3: IMAGE CROP & OVERLAY */}
+            {imageSlotTab === 'crop' && (
+              <div className="space-y-3">
+                {/* Arrange Picture Inside Frame (Zoom & Pan) */}
+                <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-zinc-200">
+                      {t('框内画面缩放与移动', 'Arrange Picture in Frame')}
+                    </span>
+                    {(selectedImageSlot.zoom !== 1 ||
+                      selectedImageSlot.focalPoint.x !== 50 ||
+                      selectedImageSlot.focalPoint.y !== 50) && (
                       <button
-                        key={pt.id}
                         type="button"
                         onClick={() =>
-                          updateRootBlock(selectedRoot.id, (prev) => ({
-                            ...prev,
-                            bgPattern: pt.id,
-                          } as SectionContainerBlock))
+                          updateImageSlotById(selectedImageSlot.id, {
+                            zoom: 1,
+                            focalPoint: { x: 50, y: 50 },
+                          })
                         }
-                        className={`py-1 rounded text-[10px] font-semibold border ${
-                          (selectedRoot.bgPattern || 'solid') === pt.id
-                            ? 'bg-zinc-100 text-zinc-900 border-white'
-                            : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                        }`}
+                        className="flex items-center gap-1 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
                       >
-                        {t(pt.zh, pt.en)}
+                        <RotateCcw size={10} />
+                        <span>{t('居中复原', 'Reset')}</span>
                       </button>
-                    ))}
+                    )}
                   </div>
 
-                  {selectedRoot.bgPattern === 'gradient' && (
-                    <div className="flex items-center justify-between bg-zinc-950 border border-zinc-700 rounded px-2 py-1">
-                      <span className="text-[10px] text-zinc-300">
-                        {t('渐变结束色', 'Gradient End')}
+                  {/* Zoom Slider */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-zinc-400">
+                      <span>{t('画面缩放 (Zoom)', 'Zoom In / Out')}</span>
+                      <span className="font-mono text-zinc-200">
+                        {Math.round(selectedImageSlot.zoom * 100)}%
                       </span>
-                      <input
-                        type="color"
-                        value={selectedRoot.bgGradientEnd || '#ffffff'}
-                        onChange={(e) =>
-                          updateRootBlock(selectedRoot.id, (prev) => ({
-                            ...prev,
-                            bgGradientEnd: e.target.value,
-                          } as SectionContainerBlock))
+                    </div>
+                    <RangeSliderWithDefault
+                      min={0.5}
+                      max={2.5}
+                      step={0.05}
+                      value={selectedImageSlot.zoom}
+                      defaultValue={1}
+                      unit="x"
+                      lang={lang}
+                      onChange={(val) =>
+                        updateImageSlotById(selectedImageSlot.id, { zoom: val })
+                      }
+                    />
+                  </div>
+
+                  {/* Pan X & Pan Y */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <div className="flex justify-between text-[10px] text-zinc-400">
+                        <span>{t('左右移动 (X)', 'Move Left/Right')}</span>
+                        <span className="font-mono text-zinc-200">
+                          {selectedImageSlot.focalPoint.x - 50 > 0
+                            ? `+${selectedImageSlot.focalPoint.x - 50}`
+                            : selectedImageSlot.focalPoint.x - 50}
+                        </span>
+                      </div>
+                      <RangeSliderWithDefault
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={selectedImageSlot.focalPoint.x}
+                        defaultValue={50}
+                        unit="%"
+                        lang={lang}
+                        onChange={(val) =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            focalPoint: {
+                              ...selectedImageSlot.focalPoint,
+                              x: Math.round(val),
+                            },
+                          })
                         }
-                        className="w-4 h-4 bg-transparent border-0 cursor-pointer"
                       />
                     </div>
-                  )}
+                    <div>
+                      <div className="flex justify-between text-[10px] text-zinc-400">
+                        <span>{t('上下移动 (Y)', 'Move Up/Down')}</span>
+                        <span className="font-mono text-zinc-200">
+                          {selectedImageSlot.focalPoint.y - 50 > 0
+                            ? `+${selectedImageSlot.focalPoint.y - 50}`
+                            : selectedImageSlot.focalPoint.y - 50}
+                        </span>
+                      </div>
+                      <RangeSliderWithDefault
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={selectedImageSlot.focalPoint.y}
+                        defaultValue={50}
+                        unit="%"
+                        lang={lang}
+                        onChange={(val) =>
+                          updateImageSlotById(selectedImageSlot.id, {
+                            focalPoint: {
+                              ...selectedImageSlot.focalPoint,
+                              y: Math.round(val),
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
 
-                  {/* Custom Background Image */}
+                  <div className="text-[10px] text-zinc-500">
+                    {t(
+                      '💡 提示：也可直接在画布上拖拽图片位置',
+                      '💡 Tip: Drag image directly on canvas to pan'
+                    )}
+                  </div>
+                </div>
+
+                {/* Decorative Frame Overlay / Sticker */}
+                <div className="space-y-2 pt-1 border-t border-zinc-700/60">
                   <input
-                    ref={containerBgInputRef}
+                    ref={frameOverlayInputRef}
                     type="file"
                     accept="image/*"
-                    onChange={handleUploadContainerBg}
+                    onChange={handleUploadFrameOverlay}
                     className="hidden"
                   />
-                  <div className="flex gap-1.5 pt-1">
+                  <div className="flex gap-1.5">
                     <button
                       type="button"
-                      onClick={() => containerBgInputRef.current?.click()}
-                      className="flex-1 py-1.5 px-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 rounded text-[11px] font-semibold flex items-center justify-center gap-1"
+                      onClick={() => frameOverlayInputRef.current?.click()}
+                      className="flex-1 py-1.5 px-2 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 rounded text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors"
                     >
                       <Upload size={11} />
                       <span>
-                        {selectedRoot.bgImage?.url
-                          ? t('更换背景图片', 'Change Bg Image')
-                          : t('上传容器背景图', 'Upload Bg Image')}
+                        {selectedImageSlot.frameOverlayUrl
+                          ? t('更换自定义相框素材', 'Change Frame Asset')
+                          : t('上传相框贴纸素材 (PNG)', 'Upload Frame Sticker')}
                       </span>
                     </button>
-                    {selectedRoot.bgImage?.url && (
+                    {selectedImageSlot.frameOverlayUrl && (
                       <button
                         type="button"
                         onClick={() =>
-                          updateRootBlock(selectedRoot.id, (prev) => {
-                            const sec = prev as SectionContainerBlock;
-                            return {
-                              ...sec,
-                              bgImage: sec.bgImage
-                                ? { ...sec.bgImage, url: null }
-                                : undefined,
-                            };
+                          updateImageSlotById(selectedImageSlot.id, {
+                            frameOverlayUrl: null,
+                            frameAssetScale: 1,
+                            frameAssetX: 0,
+                            frameAssetY: 0,
                           })
                         }
                         className="px-2 py-1 bg-zinc-950 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-[11px]"
@@ -4398,367 +5706,94 @@ export const RightInspector: React.FC = () => {
                     )}
                   </div>
 
-                  {selectedRoot.bgImage?.url && (
-                    <div className="space-y-1.5 pt-1">
-                      <div className="grid grid-cols-4 gap-1">
-                        {(
-                          [
-                            { id: 'cover', zh: '铺满', en: 'Cover' },
-                            { id: 'top_banner', zh: '顶图', en: 'Top' },
-                            { id: 'repeat', zh: '平铺', en: 'Tile' },
-                            { id: 'contain', zh: '居中', en: 'Fit' },
-                          ] as const
-                        ).map((fit) => (
+                  {selectedImageSlot.frameOverlayUrl && (
+                    <div className="bg-zinc-900/90 border border-zinc-700/80 rounded p-2.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-amber-300">
+                          {t('相框贴纸图层与位置', 'Frame Layer & Position')}
+                        </span>
+                        {((selectedImageSlot.frameAssetScale ?? 1) !== 1 ||
+                          (selectedImageSlot.frameAssetX || 0) !== 0 ||
+                          (selectedImageSlot.frameAssetY || 0) !== 0) && (
                           <button
-                            key={fit.id}
                             type="button"
                             onClick={() =>
-                              updateRootBlock(selectedRoot.id, (prev) => ({
-                                ...prev,
-                                bgImageFit: fit.id,
-                              } as SectionContainerBlock))
+                              updateImageSlotById(selectedImageSlot.id, {
+                                frameAssetScale: 1,
+                                frameAssetX: 0,
+                                frameAssetY: 0,
+                              })
+                            }
+                            className="flex items-center gap-1 text-[10px] text-amber-300 hover:text-amber-200 font-semibold"
+                          >
+                            <RotateCcw size={10} />
+                            <span>{t('重置', 'Reset')}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Layer Toggle */}
+                      <div className="grid grid-cols-3 gap-1">
+                        {(
+                          [
+                            { id: 'behind', zh: '画框后方', en: 'Behind' },
+                            { id: 'mask', zh: '形状遮罩', en: 'Mask' },
+                            { id: 'front', zh: '画面前方', en: 'In Front' },
+                          ] as const
+                        ).map((lyr) => (
+                          <button
+                            key={lyr.id}
+                            type="button"
+                            onClick={() =>
+                              updateImageSlotById(selectedImageSlot.id, {
+                                frameAssetLayer: lyr.id,
+                              })
                             }
                             className={`py-1 rounded text-[10px] font-semibold border ${
-                              (selectedRoot.bgImageFit || 'cover') === fit.id
-                                ? 'bg-zinc-100 text-zinc-900 border-white'
-                                : 'bg-zinc-900 text-zinc-400 border-zinc-700'
+                              (selectedImageSlot.frameAssetLayer || 'behind') === lyr.id
+                                ? 'bg-blue-600 border-blue-400 text-white'
+                                : 'bg-zinc-950 border-zinc-700 text-zinc-400 hover:text-zinc-200'
                             }`}
                           >
-                            {t(fit.zh, fit.en)}
+                            {t(lyr.zh, lyr.en)}
                           </button>
                         ))}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-zinc-400 shrink-0">
-                          {t('透明度', 'Opacity')}
-                        </span>
+
+                      {/* Scale */}
+                      <div>
+                        <div className="flex justify-between text-[10px] text-zinc-400">
+                          <span>{t('贴纸缩放 (Scale)', 'Scale')}</span>
+                          <span className="font-mono text-zinc-200">
+                            {Math.round((selectedImageSlot.frameAssetScale ?? 1) * 100)}%
+                          </span>
+                        </div>
                         <RangeSliderWithDefault
-                          min={0.1}
-                          max={1}
+                          min={0.5}
+                          max={2.5}
                           step={0.05}
-                          value={selectedRoot.bgImageOpacity ?? 1}
+                          value={selectedImageSlot.frameAssetScale ?? 1}
                           defaultValue={1}
+                          unit="x"
                           lang={lang}
                           onChange={(val) =>
-                            updateRootBlock(selectedRoot.id, (prev) => ({
-                              ...prev,
-                              bgImageOpacity: val,
-                            } as SectionContainerBlock))
+                            updateImageSlotById(selectedImageSlot.id, {
+                              frameAssetScale: val,
+                            })
                           }
                         />
                       </div>
                     </div>
                   )}
                 </div>
-
-                {/* Border Style & Corner Sticker */}
-                <div className="bg-zinc-900/90 border border-zinc-700/70 rounded p-2.5 space-y-2">
-                  {selectedRoot.bordered !== false && (
-                    <>
-                      <label className="block text-[10px] font-semibold text-zinc-400">
-                        {t('外框线型与粗细', 'Border Style & Width')}
-                      </label>
-                      <div className="grid grid-cols-4 gap-1">
-                        {(
-                          [
-                            { id: 'solid', zh: '实线', en: 'Solid' },
-                            { id: 'dashed', zh: '虚线', en: 'Dash' },
-                            { id: 'double', zh: '双线', en: 'Double' },
-                            { id: 'top_thick', zh: '顶粗条', en: 'Top Bar' },
-                          ] as {
-                            id: ContainerBorderStyleType;
-                            zh: string;
-                            en: string;
-                          }[]
-                        ).map((bs) => (
-                          <button
-                            key={bs.id}
-                            type="button"
-                            onClick={() =>
-                              updateRootBlock(selectedRoot.id, (prev) => ({
-                                ...prev,
-                                borderStyle: bs.id,
-                                borderWidth:
-                                  bs.id === 'double' &&
-                                  ((prev as SectionContainerBlock).borderWidth ??
-                                    1) < 3
-                                    ? 3
-                                    : (prev as SectionContainerBlock).borderWidth,
-                              } as SectionContainerBlock))
-                            }
-                            className={`py-1 rounded text-[10px] font-semibold border ${
-                              (selectedRoot.borderStyle || 'solid') === bs.id
-                                ? 'bg-zinc-100 text-zinc-900 border-white'
-                                : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                            }`}
-                          >
-                            {t(bs.zh, bs.en)}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-4 gap-1">
-                        {[1, 1.5, 2, 3].map((bw) => (
-                          <button
-                            key={bw}
-                            type="button"
-                            onClick={() =>
-                              updateRootBlock(selectedRoot.id, (prev) => ({
-                                ...prev,
-                                borderWidth: bw,
-                              } as SectionContainerBlock))
-                            }
-                            className={`py-0.5 rounded text-[10px] font-bold border ${
-                              (selectedRoot.borderWidth ?? 1) === bw
-                                ? 'bg-zinc-100 text-zinc-900 border-white'
-                                : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                            }`}
-                          >
-                            {bw}px
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  {/* Corner Sticker */}
-                  <div className="pt-1">
-                    <input
-                      ref={cornerStickerInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleUploadCornerSticker}
-                      className="hidden"
-                    />
-                    <div className="flex gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => cornerStickerInputRef.current?.click()}
-                        className="flex-1 py-1.5 px-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 rounded text-[11px] font-semibold flex items-center justify-center gap-1"
-                      >
-                        <Upload size={11} />
-                        <span>
-                          {selectedRoot.cornerStickerUrl
-                            ? t('更换右上角标贴纸', 'Change Corner Sticker')
-                            : t('上传右上角标贴纸', 'Corner Sticker PNG')}
-                        </span>
-                      </button>
-                      {selectedRoot.cornerStickerUrl && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateRootBlock(selectedRoot.id, (prev) => ({
-                              ...prev,
-                              cornerStickerUrl: null,
-                            } as SectionContainerBlock))
-                          }
-                          className="px-2 py-1 bg-zinc-950 text-zinc-400 hover:text-red-300 border border-zinc-700 rounded text-[11px]"
-                        >
-                          {t('清除', 'Clear')}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
               </div>
             )}
-          </div>
-        ) : selectedRoot?.type === 'highlights_bar' ? (
-          /* Highlights Bar Inspector */
-          (() => {
-            const b = selectedRoot as HighlightsBarBlock;
-            return (
-              <div className="bg-zinc-800/60 border border-zinc-800 rounded-lg p-3 space-y-2.5">
-                <div className="text-xs font-bold text-white">
-                  {t('看点卡片横栏', 'Highlights Bar')}
                 </div>
-                <div className="flex gap-3 text-xs text-zinc-300">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={b.showHeading !== false}
-                      onChange={(e) =>
-                        updateRootBlock(b.id, (prev) => ({
-                          ...prev,
-                          showHeading: e.target.checked,
-                        } as HighlightsBarBlock))
-                      }
-                      className="rounded accent-blue-500"
-                    />
-                    <span>{t('显示标题', 'Show Heading')}</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={b.showBullet !== false}
-                      onChange={(e) =>
-                        updateRootBlock(b.id, (prev) => ({
-                          ...prev,
-                          showBullet: e.target.checked,
-                        } as HighlightsBarBlock))
-                      }
-                      className="rounded accent-blue-500"
-                    />
-                    <span>{t('显示符号', 'Show Icon')}</span>
-                  </label>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateRootBlock(b.id, (prev) => {
-                      const cur = prev as HighlightsBarBlock;
-                      return {
-                        ...cur,
-                        items: [
-                          ...cur.items,
-                          {
-                            id: uid('hl'),
-                            title: t('新增看点', 'NEW'),
-                            subtitle: t('点击编辑标题', 'Title'),
-                            showSubtitle: true,
-                            image: createImageSlot('4:3', 'HIGHLIGHT'),
-                            bgColor: '#52525b',
-                          },
-                        ],
-                      };
-                    })
-                  }
-                  className="w-full py-1.5 px-2 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 rounded text-xs text-zinc-200 flex items-center justify-center gap-1"
-                >
-                  <Plus size={12} />
-                  <span>{t('添加看点卡片', 'Add Highlight Card')}</span>
-                </button>
-              </div>
-            );
-          })()
-        ) : selectedRoot?.type === 'masthead' ? (
-          /* Masthead Banner Inspector */
-          (() => {
-            const b = selectedRoot as MastheadBlock;
-            return (
-              <div className="bg-zinc-800/60 border border-zinc-800 rounded-lg p-3 space-y-2.5">
-                <div className="text-xs font-bold text-white">
-                  {t('报头封面横幅', 'Masthead Banner')}
-                </div>
-                <div className="grid grid-cols-2 gap-1.5 text-xs text-zinc-300">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={b.showTopBar !== false}
-                      onChange={(e) =>
-                        updateRootBlock(b.id, (prev) => ({
-                          ...prev,
-                          showTopBar: e.target.checked,
-                        } as MastheadBlock))
-                      }
-                      className="rounded accent-blue-500"
-                    />
-                    <span>{t('顶部机构与期数', 'Top Bar')}</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={b.showHeroOverlay !== false}
-                      onChange={(e) =>
-                        updateRootBlock(b.id, (prev) => ({
-                          ...prev,
-                          showHeroOverlay: e.target.checked,
-                        } as MastheadBlock))
-                      }
-                      className="rounded accent-blue-500"
-                    />
-                    <span>{t('封面大标题', 'Hero Title')}</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={b.showSubBanner !== false}
-                      onChange={(e) =>
-                        updateRootBlock(b.id, (prev) => ({
-                          ...prev,
-                          showSubBanner: e.target.checked,
-                        } as MastheadBlock))
-                      }
-                      className="rounded accent-blue-500"
-                    />
-                    <span>{t('底部副横幅', 'Sub Banner')}</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={b.showSubBannerDesc !== false}
-                      onChange={(e) =>
-                        updateRootBlock(b.id, (prev) => ({
-                          ...prev,
-                          showSubBannerDesc: e.target.checked,
-                        } as MastheadBlock))
-                      }
-                      className="rounded accent-blue-500"
-                    />
-                    <span>{t('导读寄语', 'Sub Text')}</span>
-                  </label>
-                </div>
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-[11px] text-zinc-400">
-                    {t('报头主题色', 'Banner Accent')}
-                  </span>
-                  <input
-                    type="color"
-                    value={b.accentColor}
-                    onChange={(e) =>
-                      updateRootBlock(b.id, (prev) => ({
-                        ...prev,
-                        accentColor: e.target.value,
-                      } as MastheadBlock))
-                    }
-                    className="w-6 h-6 bg-transparent border-0 cursor-pointer"
-                  />
-                </div>
-              </div>
-            );
-          })()
-        ) : selectedRoot?.type === 'footer_banner' ? (
-          /* Footer Banner Inspector */
-          (() => {
-            const b = selectedRoot as FooterBannerBlock;
-            return (
-              <div className="bg-zinc-800/60 border border-zinc-800 rounded-lg p-3 space-y-2.5">
-                <div className="text-xs font-bold text-white">
-                  {t('页脚收尾横幅', 'Footer Banner')}
-                </div>
-                <div className="grid grid-cols-2 gap-1.5 text-xs text-zinc-300">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={b.showOverlayText !== false}
-                      onChange={(e) =>
-                        updateRootBlock(b.id, (prev) => ({
-                          ...prev,
-                          showOverlayText: e.target.checked,
-                        } as FooterBannerBlock))
-                      }
-                      className="rounded accent-blue-500"
-                    />
-                    <span>{t('显示覆盖文字', 'Overlay Text')}</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={b.showBrandLabel !== false}
-                      onChange={(e) =>
-                        updateRootBlock(b.id, (prev) => ({
-                          ...prev,
-                          showBrandLabel: e.target.checked,
-                        } as FooterBannerBlock))
-                      }
-                      className="rounded accent-blue-500"
-                    />
-                    <span>{t('显示底部品牌', 'Brand Label')}</span>
-                  </label>
-                </div>
-              </div>
-            );
-          })()
-        ) : null}
+              )}
+            </div>
+          );
+        })()}
+
 
         {/* ========================================================= */}
         {/* 4. COMPACT GLOBAL CANVAS SETTINGS                         */}

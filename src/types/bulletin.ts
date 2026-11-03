@@ -354,6 +354,93 @@ export interface FeatureCalloutGridBlock {
   footerNote: string;
 }
 
+export type CollageLayoutMode = 'preset' | 'freehand';
+
+export type CollagePresetType =
+  | '1_hero'
+  | '2_split_h'
+  | '2_split_v'
+  | '3_one_top_two'
+  | '3_two_left_one'
+  | '3_grid'
+  | '4_grid_2x2'
+  | '4_one_left_three'
+  | '5_mosaic'
+  | '6_grid_3x2'
+  | 'polaroid_pile'
+  | 'masonry';
+
+export interface PictureCollageItem {
+  id: string;
+  image: ImageSlotData;
+  caption?: string;
+  showCaption?: boolean;
+
+  // Freehand layout positioning (within collage container canvas)
+  freehand?: {
+    x: number;       // % from left (0 to 100)
+    y: number;       // % or px from top
+    width: number;   // % width (e.g. 45%)
+    height?: number; // px or % (optional, aspect ratio preferred)
+    rotation?: number; // degrees -45 to 45
+    zIndex?: number;   // 1 to 99
+  };
+}
+
+export interface PictureCollageBlock {
+  id: string;
+  type: 'picture_collage';
+  title?: string;
+  showTitle?: boolean;
+  layoutMode: CollageLayoutMode; // 'preset' | 'freehand'
+  presetType: CollagePresetType;  // e.g. '4_grid_2x2', 'polaroid_pile', etc.
+  gap: number; // 0, 4, 8, 12, 16px
+  borderRadius?: number;
+  containerHeight?: number; // for freehand mode canvas (e.g. 380px)
+  items: PictureCollageItem[];
+}
+
+export interface TableCell {
+  id: string;
+  content: string; // rich text or HTML
+  align?: 'left' | 'center' | 'right';
+  bold?: boolean;
+  color?: string;
+  bgColor?: string;
+}
+
+export interface TableBlock {
+  id: string;
+  type: 'table_block';
+  title?: string;
+  showTitle?: boolean;
+  titleAlign?: 'left' | 'center' | 'right';
+  hasHeader: boolean;
+  headers: string[]; // header cell text or HTML
+  rows: TableCell[][]; // 2D grid: rows[rowIndex][colIndex]
+  // 4-side outer borders
+  borderTop: boolean;
+  borderBottom: boolean;
+  borderLeft: boolean;
+  borderRight: boolean;
+  // Inner dividers
+  innerBorderHorizontal: boolean;
+  innerBorderVertical: boolean;
+  // Border attributes
+  borderColor?: string;
+  borderWidth?: number; // 1, 2, 3
+  borderStyle?: 'solid' | 'dashed' | 'dotted';
+  // Table styling
+  headerBg?: string;
+  headerTextColor?: string;
+  headerAlign?: 'left' | 'center' | 'right';
+  zebraStriping?: boolean;
+  zebraBg?: string;
+  cellPadding?: 'compact' | 'normal' | 'relaxed';
+  textAlign?: 'left' | 'center' | 'right';
+  fontSize?: number; // default 12px
+}
+
 export type ContentBlock =
   | IntroQuoteBoxBlock
   | SimpleTextBlock
@@ -365,7 +452,9 @@ export type ContentBlock =
   | KpiStatRowBlock
   | KpiBannerCardBlock
   | BulletListBlock
-  | FeatureCalloutGridBlock;
+  | FeatureCalloutGridBlock
+  | PictureCollageBlock
+  | TableBlock;
 
 // ==========================================
 // 3. SECTION / BLANK CONTAINER

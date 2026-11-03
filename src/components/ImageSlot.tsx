@@ -405,14 +405,14 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
             : undefined,
         borderRadius: computedRadius,
         border: isSelected
-          ? '2px solid #2563eb'
+          ? '1px solid #3b82f6'
           : isReorderDragOver
-          ? '2px dashed #2563eb'
+          ? '1.5px dashed #3b82f6'
           : isDraggingOver
-          ? '2px dashed #2563eb'
+          ? '1.5px dashed #3b82f6'
           : customBorderCss || (!showActualImage ? '1px solid #a1a1aa' : 'none'),
         boxShadow: isSelected
-          ? '0 0 0 1px #2563eb, 0 0 14px rgba(37, 99, 235, 0.45)'
+          ? '0 0 0 1px rgba(59, 130, 246, 0.25)'
           : boxShadowCss,
         transition: 'border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease',
         position: 'relative',
@@ -880,16 +880,16 @@ export const ImageSlot: React.FC<ImageSlotProps> = ({
           onMouseDown={handleResizeStart}
           style={{
             position: 'absolute',
-            right: '-5px',
-            bottom: '-5px',
-            width: '12px',
-            height: '12px',
-            backgroundColor: '#2563eb',
-            border: '2px solid #ffffff',
+            right: '-4px',
+            bottom: '-4px',
+            width: '8px',
+            height: '8px',
+            backgroundColor: '#3b82f6',
+            border: '1.5px solid #ffffff',
             borderRadius: '2px',
             cursor: 'nwse-resize',
             zIndex: 30,
-            boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
           }}
         />
       )}

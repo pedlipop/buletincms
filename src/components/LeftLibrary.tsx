@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import {
   createBlankContainer,
+  createCollageContainer,
+  createTableContainer,
   createContentBlock,
   createFooterBannerBlock,
   createHighlightsBarBlock,
@@ -287,6 +289,14 @@ export const LeftLibrary: React.FC = () => {
     insertRootBlock(createBlankContainer('freeform_asset_block'));
   };
 
+  const handleAddCollageContainer = () => {
+    insertRootBlock(createCollageContainer());
+  };
+
+  const handleAddTableContainer = () => {
+    insertRootBlock(createTableContainer());
+  };
+
   const handleSelectTab = (tab: 'blocks' | 'assets' | 'templates') => {
     if (activeTab === tab && !isDrawerCollapsed) {
       setIsDrawerCollapsed(true);
@@ -472,6 +482,56 @@ export const LeftLibrary: React.FC = () => {
                 </span>
               </button>
 
+              {/* Photo Collage Container */}
+              <button
+                type="button"
+                onClick={handleAddCollageContainer}
+                {...bindDrag({
+                  source: 'library_root',
+                  rootFactory: 'collage_container',
+                })}
+                className="group bg-zinc-800/90 hover:bg-zinc-800 border border-amber-500/40 hover:border-amber-400 rounded-md p-2 text-left transition-all flex flex-col gap-1.5 cursor-grab active:cursor-grabbing"
+              >
+                <div className="bg-zinc-200 rounded p-1.5 flex flex-col gap-1 border border-amber-400/60">
+                  <div className="grid grid-cols-2 gap-1 h-9">
+                    <div className="bg-zinc-400 rounded-[1px]" />
+                    <div className="bg-zinc-400 rounded-[1px]" />
+                    <div className="bg-zinc-400 rounded-[1px]" />
+                    <div className="bg-zinc-400 rounded-[1px]" />
+                  </div>
+                </div>
+                <span className="text-[11px] font-semibold text-amber-300 group-hover:text-white">
+                  {t('+ 照片拼贴容器', '+ Collage Box')}
+                </span>
+              </button>
+
+              {/* Table Container */}
+              <button
+                type="button"
+                onClick={handleAddTableContainer}
+                {...bindDrag({
+                  source: 'library_root',
+                  rootFactory: 'table_container',
+                })}
+                className="group bg-zinc-800/90 hover:bg-zinc-800 border border-emerald-500/40 hover:border-emerald-400 rounded-md p-2 text-left transition-all flex flex-col gap-1.5 cursor-grab active:cursor-grabbing"
+              >
+                <div className="bg-zinc-200 rounded p-1.5 flex flex-col gap-1 border border-emerald-400/60">
+                  <div className="grid grid-cols-4 gap-0.5 h-9 bg-zinc-300 p-0.5 rounded-[2px]">
+                    <div className="bg-emerald-600/30 rounded-[1px]" />
+                    <div className="bg-emerald-600/30 rounded-[1px]" />
+                    <div className="bg-emerald-600/30 rounded-[1px]" />
+                    <div className="bg-emerald-600/30 rounded-[1px]" />
+                    <div className="bg-zinc-400 rounded-[1px]" />
+                    <div className="bg-zinc-400 rounded-[1px]" />
+                    <div className="bg-zinc-400 rounded-[1px]" />
+                    <div className="bg-zinc-400 rounded-[1px]" />
+                  </div>
+                </div>
+                <span className="text-[11px] font-semibold text-emerald-300 group-hover:text-white">
+                  {t('+ 数据表格容器 (4周边框控制)', '+ Data Table Container')}
+                </span>
+              </button>
+
               {/* Simple Title Container */}
               <button
                 type="button"
@@ -626,6 +686,81 @@ export const LeftLibrary: React.FC = () => {
                       </div>
                       <span className="text-xs font-semibold text-blue-200 group-hover:text-white">
                         {t('+ 自定义图片/素材框 (不裁切)', '+ Freeform Picture / Asset')}
+                      </span>
+                    </button>
+
+                    {/* Picture Collage Block */}
+                    <button
+                      type="button"
+                      onClick={() => insertContentBlock('picture_collage')}
+                      {...bindDrag({
+                        source: 'library_child',
+                        blockType: 'picture_collage',
+                      })}
+                      className="w-full group bg-zinc-800/90 hover:bg-zinc-800 border border-amber-500/40 hover:border-amber-400 rounded-md p-2 text-left transition-all flex flex-col gap-1.5 cursor-grab active:cursor-grabbing"
+                    >
+                      <div className="bg-zinc-200 rounded p-1.5 border border-amber-400/50 grid grid-cols-3 gap-1 h-10 items-center">
+                        <div className="bg-zinc-400 h-7 rounded-[2px]" />
+                        <div className="bg-zinc-400 h-7 rounded-[2px]" />
+                        <div className="bg-zinc-400 h-7 rounded-[2px]" />
+                      </div>
+                      <span className="text-xs font-semibold text-amber-200 group-hover:text-white">
+                        {t('+ 照片拼贴画廊 (自由手绘/预设网格)', '+ Picture Collage (Freehand/Grid)')}
+                      </span>
+                    </button>
+
+                    {/* Table Block: Classic / Data Table */}
+                    <button
+                      type="button"
+                      onClick={() => insertContentBlock('table_block')}
+                      {...bindDrag({
+                        source: 'library_child',
+                        blockType: 'table_block',
+                      })}
+                      className="w-full group bg-zinc-800/90 hover:bg-zinc-800 border border-emerald-500/40 hover:border-emerald-400 rounded-md p-2 text-left transition-all flex flex-col gap-1.5 cursor-grab active:cursor-grabbing"
+                    >
+                      <div className="bg-zinc-200 rounded p-1.5 border border-emerald-400/50 flex flex-col gap-0.5 h-10 justify-center">
+                        <div className="flex gap-1 border-b border-zinc-400 pb-0.5">
+                          <div className="bg-emerald-600 h-2 w-1/4 rounded-[1px]" />
+                          <div className="bg-emerald-600 h-2 w-1/4 rounded-[1px]" />
+                          <div className="bg-emerald-600 h-2 w-1/4 rounded-[1px]" />
+                          <div className="bg-emerald-600 h-2 w-1/4 rounded-[1px]" />
+                        </div>
+                        <div className="flex gap-1 pt-0.5">
+                          <div className="bg-zinc-400 h-2 w-1/4 rounded-[1px]" />
+                          <div className="bg-zinc-400 h-2 w-1/4 rounded-[1px]" />
+                          <div className="bg-zinc-400 h-2 w-1/4 rounded-[1px]" />
+                          <div className="bg-zinc-400 h-2 w-1/4 rounded-[1px]" />
+                        </div>
+                      </div>
+                      <span className="text-xs font-semibold text-emerald-200 group-hover:text-white">
+                        {t('+ 数据统计表格 (四周线独立可调)', '+ Data Table (4-Side Line Control)')}
+                      </span>
+                    </button>
+
+                    {/* Table Block: Tournament / Match Results (Screenshot Style) */}
+                    <button
+                      type="button"
+                      onClick={() => insertContentBlock('table_block', undefined, undefined, 'tournament')}
+                      {...bindDrag({
+                        source: 'library_child',
+                        blockType: 'table_block',
+                        variantHint: 'tournament',
+                      })}
+                      className="w-full group bg-zinc-800/90 hover:bg-zinc-800 border border-emerald-600/50 hover:border-emerald-400 rounded-md p-2 text-left transition-all flex flex-col gap-1.5 cursor-grab active:cursor-grabbing"
+                    >
+                      <div className="bg-zinc-200 rounded p-1.5 border border-emerald-500/50 flex flex-col gap-1 h-10 justify-center">
+                        <div className="text-[8px] font-black text-center text-emerald-700 tracking-wider">
+                          战报汇总 / TOURNAMENT REPORT
+                        </div>
+                        <div className="border-t border-b border-emerald-600 flex justify-between px-2 py-0.5">
+                          <span className="text-[7px] font-bold text-amber-700">冠军</span>
+                          <span className="text-[7px] font-bold text-zinc-500">亚军</span>
+                          <span className="text-[7px] font-bold text-amber-700">季军</span>
+                        </div>
+                      </div>
+                      <span className="text-xs font-semibold text-emerald-300 group-hover:text-white">
+                        {t('+ 战报汇总榜 (上下横线无竖边)', '+ Match Results Table (Horizontal Only)')}
                       </span>
                     </button>
 

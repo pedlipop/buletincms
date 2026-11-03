@@ -1,9 +1,11 @@
 import express from 'express';
 import cors from 'cors';
+import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import pg from 'pg';
+import { WebSocketServer, WebSocket } from 'ws';
 
 const { Pool } = pg;
 
@@ -370,9 +372,159 @@ if (fs.existsSync(distPath)) {
   });
 }
 
+// ==========================================
+// REAL-TIME COLLABORATION WEBSOCKET SERVER
+// ==========================================
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+// In-memory room manager: docId -> Map<WebSocket, { id, name, color }>()
+const rooms = new Map();
+
+function broadcastToRoom(docId, message, senderWs = null) {
+  const room = rooms.get(docId);
+  if (!room) return;
+  const payload = typeof message === 'string' ? message : JSON.stringify(message);
+  for (const [clientWs] of room.entries()) {
+    if (clientWs !== senderWs && clientWs.readyState === WebSocket.OPEN) {
+      try {
+        clientWs.send(payload);
+      } catch (err) {
+        console.warn('Failed to send to peer:', err);
+      }
+    }
+  }
+}
+
+wss.on('connection', (ws) => {
+  let currentDocId = null;
+  let currentUser = null;
+
+  ws.on('message', async (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+
+      if (msg.type === 'join') {
+        const { docId, user } = msg;
+        currentDocId = docId;
+        currentUser = user || {
+          id: 'user_' + Math.random().toString(36).slice(2, 8),
+          name: '协作成员',
+          color: '#3b82f6',
+        };
+
+        if (!rooms.has(docId)) {
+          rooms.set(docId, new Map());
+        }
+        const room = rooms.get(docId);
+        room.set(ws, currentUser);
+
+        // 1. Send current room peers to the joining client
+        const peers = Array.from(room.values()).filter((p) => p.id !== currentUser.id);
+        ws.send(JSON.stringify({
+          type: 'room_sync',
+          peers,
+          self: currentUser,
+          onlineCount: room.size,
+        }));
+
+        // 2. Notify other peers in this room
+        broadcastToRoom(docId, {
+          type: 'peer_joined',
+          user: currentUser,
+          onlineCount: room.size,
+        }, ws);
+      } else if (msg.type === 'cursor') {
+        // Broadcast cursor position to other peers in room
+        if (currentDocId && currentUser) {
+          broadcastToRoom(currentDocId, {
+            type: 'cursor',
+            userId: currentUser.id,
+            userName: currentUser.name,
+            userColor: currentUser.color,
+            x: msg.x,
+            y: msg.y,
+            activeBlockId: msg.activeBlockId || null,
+          }, ws);
+        }
+      } else if (msg.type === 'doc_update') {
+        // Real-time document change broadcast
+        if (currentDocId && msg.document) {
+          broadcastToRoom(currentDocId, {
+            type: 'doc_update',
+            docId: currentDocId,
+            document: msg.document,
+            senderId: currentUser ? currentUser.id : null,
+            senderName: currentUser ? currentUser.name : '',
+            timestamp: Date.now(),
+          }, ws);
+
+          // Persist to database / local_db in background
+          try {
+            const doc = msg.document;
+            if (usePostgres && pool) {
+              await pool.query(
+                `INSERT INTO bulletins (id, title, issue_no, doc_data, updated_at)
+                 VALUES ($1, $2, $3, $4, NOW())
+                 ON CONFLICT (id) DO UPDATE SET
+                   title = EXCLUDED.title,
+                   issue_no = EXCLUDED.issue_no,
+                   doc_data = EXCLUDED.doc_data,
+                   updated_at = NOW()`,
+                [doc.id, doc.title || '', doc.issueNumber || '', JSON.stringify(doc)]
+              );
+            } else {
+              const db = readLocalDb();
+              db.bulletins[doc.id] = {
+                id: doc.id,
+                title: doc.title,
+                issueNo: doc.issueNumber,
+                documentData: doc,
+                updatedAt: new Date().toISOString(),
+              };
+              writeLocalDb(db);
+            }
+          } catch (persistErr) {
+            console.warn('Real-time doc persist background error:', persistErr);
+          }
+        }
+      } else if (msg.type === 'selection') {
+        if (currentDocId && currentUser) {
+          broadcastToRoom(currentDocId, {
+            type: 'peer_selection',
+            userId: currentUser.id,
+            userName: currentUser.name,
+            userColor: currentUser.color,
+            selectedRootId: msg.selectedRootId || null,
+            selectedChildId: msg.selectedChildId || null,
+          }, ws);
+        }
+      }
+    } catch (e) {
+      console.warn('Error processing WS message:', e);
+    }
+  });
+
+  ws.on('close', () => {
+    if (currentDocId && rooms.has(currentDocId)) {
+      const room = rooms.get(currentDocId);
+      room.delete(ws);
+      if (room.size === 0) {
+        rooms.delete(currentDocId);
+      } else if (currentUser) {
+        broadcastToRoom(currentDocId, {
+          type: 'peer_left',
+          userId: currentUser.id,
+          onlineCount: room.size,
+        });
+      }
+    }
+  });
+});
+
 // Start server immediately to bind $PORT for Railway deployment health checks
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`TheBulletin CMS Server running on http://0.0.0.0:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`TheBulletin CMS Server running on http://0.0.0.0:${PORT} (WebSocket on /ws)`);
   initDatabase().catch((err) => {
     console.error('Background database initialization failed:', err);
   });

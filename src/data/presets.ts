@@ -1,12 +1,18 @@
 import {
   AspectRatioType,
   BulletinDocument,
+  CollageLayoutMode,
+  CollagePresetType,
   ContentBlock,
   CustomColumnItem,
   FooterBannerBlock,
   HighlightsBarBlock,
   ImageSlotData,
   MastheadBlock,
+  PictureCollageBlock,
+  PictureCollageItem,
+  TableBlock,
+  TableCell,
   SectionContainerBlock,
   SectionTheme,
 } from '../types/bulletin';
@@ -393,8 +399,184 @@ export const createContentBlock = (
         showFooterNote: true,
         footerNote: '持续倾听员工反馈，不断丰富日常餐饮与后勤服务品质。',
       };
+
+    case 'picture_collage':
+      return createPictureCollageBlock(
+        variantHint === 'freehand' ? 'freehand' : 'preset',
+        (variantHint && variantHint !== 'freehand' ? variantHint : '4_grid_2x2') as CollagePresetType
+      );
+
+    case 'table_block':
+      return createTableBlock(
+        variantHint === 'tournament' ? 'tournament_result' : 'classic'
+      );
   }
 };
+
+export const createPictureCollageItem = (
+  aspect: AspectRatioType = '4:3',
+  label = 'COLLAGE PHOTO',
+  freehand?: PictureCollageItem['freehand']
+): PictureCollageItem => ({
+  id: uid('item'),
+  image: createImageSlot(aspect, label),
+  caption: '',
+  showCaption: false,
+  freehand: freehand || {
+    x: 10,
+    y: 10,
+    width: 44,
+    rotation: 0,
+    zIndex: 1,
+  },
+});
+
+export const createPictureCollageBlock = (
+  layoutMode: CollageLayoutMode = 'preset',
+  presetType: CollagePresetType = '4_grid_2x2'
+): PictureCollageBlock => ({
+  id: uid('blk'),
+  type: 'picture_collage',
+  title: '照片拼贴画廊',
+  showTitle: false,
+  layoutMode,
+  presetType,
+  gap: 8,
+  containerHeight: 380,
+  items: [
+    createPictureCollageItem('4:3', 'PHOTO 01', { x: 4, y: 5, width: 44, rotation: -2, zIndex: 1 }),
+    createPictureCollageItem('4:3', 'PHOTO 02', { x: 52, y: 5, width: 44, rotation: 1.5, zIndex: 2 }),
+    createPictureCollageItem('4:3', 'PHOTO 03', { x: 4, y: 52, width: 44, rotation: 2, zIndex: 3 }),
+    createPictureCollageItem('4:3', 'PHOTO 04', { x: 52, y: 52, width: 44, rotation: -1.5, zIndex: 4 }),
+  ],
+});
+
+export const createTableBlock = (
+  variant: 'tournament_result' | 'classic' | 'minimal' = 'classic'
+): TableBlock => {
+  if (variant === 'tournament_result') {
+    return {
+      id: uid('blk'),
+      type: 'table_block',
+      title: '战报汇总',
+      showTitle: true,
+      titleAlign: 'center',
+      hasHeader: true,
+      headers: ['男单', '女单', '男双', '混双'],
+      headerAlign: 'center',
+      textAlign: 'center',
+      borderTop: false,
+      borderBottom: true,
+      borderLeft: false,
+      borderRight: false,
+      innerBorderHorizontal: true,
+      innerBorderVertical: false,
+      borderColor: '#15803d',
+      borderWidth: 1,
+      borderStyle: 'solid',
+      zebraStriping: false,
+      cellPadding: 'normal',
+      rows: [
+        [
+          { id: uid('cell'), content: '<div style="color: #b45309; font-size: 11px; font-weight: bold; margin-bottom: 2px;">冠军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">AJMAIN</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">鼎兴 应急管理部</div>' },
+          { id: uid('cell'), content: '<div style="color: #b45309; font-size: 11px; font-weight: bold; margin-bottom: 2px;">冠军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">陆小兰</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">中青 综合管理部</div>' },
+          { id: uid('cell'), content: '<div style="color: #b45309; font-size: 11px; font-weight: bold; margin-bottom: 2px;">冠军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">GALAN & ERIC</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">中青 干燥回窑一车间 / 中青 生产运营部</div>' },
+          { id: uid('cell'), content: '<div style="color: #b45309; font-size: 11px; font-weight: bold; margin-bottom: 2px;">冠军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">AJMAIN & 周玲玲</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">鼎兴 应急管理部 / 生产管理部</div>' },
+        ],
+        [
+          { id: uid('cell'), content: '<div style="color: #71717a; font-size: 11px; font-weight: bold; margin-bottom: 2px;">亚军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">DUWINDO MARBUN</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">鼎兴 电镍车间</div>' },
+          { id: uid('cell'), content: '<div style="color: #71717a; font-size: 11px; font-weight: bold; margin-bottom: 2px;">亚军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">周玲玲</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">鼎兴 生产管理部</div>' },
+          { id: uid('cell'), content: '<div style="color: #71717a; font-size: 11px; font-weight: bold; margin-bottom: 2px;">亚军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">CHORNELIUS & MELTON</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">鼎兴 综合管理部 / 中青 生产运营部</div>' },
+          { id: uid('cell'), content: '<div style="color: #71717a; font-size: 11px; font-weight: bold; margin-bottom: 2px;">亚军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">FEDERICO / THERESIA</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">中青 生产管理部 / 鼎兴 综合管理部</div>' },
+        ],
+        [
+          { id: uid('cell'), content: '<div style="color: #b45309; font-size: 11px; font-weight: bold; margin-bottom: 2px;">季军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">RAYHAN TAMIMI</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">中青 回窑二车间</div>' },
+          { id: uid('cell'), content: '<div style="color: #b45309; font-size: 11px; font-weight: bold; margin-bottom: 2px;">季军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">RICKA NANDILLA</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">鼎兴 生产运营部</div>' },
+          { id: uid('cell'), content: '<div style="color: #b45309; font-size: 11px; font-weight: bold; margin-bottom: 2px;">季军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">SALDI & HAMZAH</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">中青 熔炼一车间 / 中青 熔炼一车间</div>' },
+          { id: uid('cell'), content: '<div style="color: #b45309; font-size: 11px; font-weight: bold; margin-bottom: 2px;">季军</div><div style="color: #15803d; font-size: 14px; font-weight: 800; line-height: 1.2;">LAURENSIUS / RICKA</div><div style="color: #52525b; font-size: 10px; margin-top: 2px;">中青 生产运营部 / 中青 生产运营部</div>' },
+        ],
+      ],
+    };
+  }
+
+  return {
+    id: uid('blk'),
+    type: 'table_block',
+    title: '统计数据明细表',
+    showTitle: false,
+    titleAlign: 'left',
+    hasHeader: true,
+    headers: ['项目类别', '计划目标', '当前达成', '完成率', '责任部门'],
+    headerAlign: 'center',
+    textAlign: 'center',
+    borderTop: true,
+    borderBottom: true,
+    borderLeft: false,
+    borderRight: false,
+    innerBorderHorizontal: true,
+    innerBorderVertical: false,
+    borderColor: '#e4e4e7',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    zebraStriping: false,
+    cellPadding: 'normal',
+    rows: [
+      [
+        { id: uid('cell'), content: '安全应急演练' },
+        { id: uid('cell'), content: '12 次' },
+        { id: uid('cell'), content: '12 次' },
+        { id: uid('cell'), content: '100%' },
+        { id: uid('cell'), content: '应急管理部' },
+      ],
+      [
+        { id: uid('cell'), content: '一线技术培训' },
+        { id: uid('cell'), content: '24 课时' },
+        { id: uid('cell'), content: '22 课时' },
+        { id: uid('cell'), content: '91.7%' },
+        { id: uid('cell'), content: '技术与培训科' },
+      ],
+      [
+        { id: uid('cell'), content: '文体健康活动' },
+        { id: uid('cell'), content: '6 场' },
+        { id: uid('cell'), content: '6 场' },
+        { id: uid('cell'), content: '100%' },
+        { id: uid('cell'), content: '综合工会' },
+      ],
+    ],
+  };
+};
+
+export const createTableContainer = (
+  variant: 'tournament_result' | 'classic' = 'classic'
+): SectionContainerBlock => ({
+  id: uid('sec'),
+  type: 'section_container',
+  showHeader: false,
+  showBadge: false,
+  sectionNumber: '',
+  title: '数据表格容器',
+  theme: { ...SECTION_THEMES.grey_wireframe },
+  padding: 'sm',
+  borderRadius: 8,
+  bordered: true,
+  children: [createTableBlock(variant)],
+});
+
+export const createCollageContainer = (
+  layoutMode: CollageLayoutMode = 'preset'
+): SectionContainerBlock => ({
+  id: uid('sec'),
+  type: 'section_container',
+  showHeader: false,
+  showBadge: false,
+  sectionNumber: '',
+  title: '照片拼贴容器',
+  theme: { ...SECTION_THEMES.grey_wireframe },
+  padding: 'sm',
+  borderRadius: 12,
+  bordered: true,
+  children: [createPictureCollageBlock(layoutMode)],
+});
 
 export const createSectionContainer = (
   sectionNumber = '1',

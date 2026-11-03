@@ -16,6 +16,9 @@ import {
   DatedEventBlock,
   FeatureCalloutGridBlock,
   FooterBannerBlock,
+  PictureCollageBlock,
+  PictureCollageItem,
+  TableBlock,
   FreeformAssetBlock,
   HighlightsBarBlock,
   IntroQuoteBoxBlock,
@@ -30,10 +33,12 @@ import {
   SplitMediaTextBlock,
   TwoColumnCardsBlock,
 } from '../types/bulletin';
-import { createImageSlot, SECTION_THEMES } from '../data/presets';
+import { createImageSlot, createPictureCollageItem, SECTION_THEMES } from '../data/presets';
 import { DragPayload, useBulletinStore } from '../store/useBulletinStore';
+import { collaborationService, RemoteCursor } from '../services/collaboration';
 import { EditableText } from './EditableText';
 import { ImageSlot } from './ImageSlot';
+import { TableBlockView } from './TableBlockView';
 import { resolveLayoutRows } from '../utils/photoLayout';
 
 // =======================================================
@@ -264,6 +269,8 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
   const deleteContentBlock = useBulletinStore((s) => s.deleteContentBlock);
   const handleDropIntoContainer = useBulletinStore((s) => s.handleDropIntoContainer);
   const saveTemplate = useBulletinStore((s) => s.saveTemplate);
+  const lang = useBulletinStore((s) => s.lang);
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
 
   const isSelected = !previewMode && selectedChildBlockId === block.id;
 
@@ -1752,6 +1759,306 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
           </div>
         );
       }
+
+      case 'picture_collage': {
+        const b = block as PictureCollageBlock;
+
+        const handleAddPhoto = () => {
+          const count = b.items.length;
+          const newItem = createPictureCollageItem(
+            '4:3',
+            `PHOTO ${String(count + 1).padStart(2, '0')}`,
+            {
+              x: 10 + (count % 3) * 20,
+              y: 10 + (count % 3) * 15,
+              width: 44,
+              rotation: count % 2 === 0 ? 3 : -3,
+              zIndex: count + 1,
+            }
+          );
+          updateSelf({ items: [...b.items, newItem] });
+        };
+
+        const handleRemovePhoto = (index: number) => {
+          if (b.items.length <= 1) return;
+          const next = b.items.filter((_, i) => i !== index);
+          updateSelf({ items: next });
+        };
+
+        const updateItemFreehand = (index: number, patch: Partial<NonNullable<PictureCollageItem['freehand']>>) => {
+          const next = [...b.items];
+          const curr = next[index].freehand || { x: 10, y: 10, width: 44, rotation: 0, zIndex: 1 };
+          next[index] = {
+            ...next[index],
+            freehand: { ...curr, ...patch },
+          };
+          updateSelf({ items: next });
+        };
+
+        const isFreehand = b.layoutMode === 'freehand';
+        const gapPx = `${b.gap ?? 8}px`;
+
+        return (
+          <div
+            style={{
+              backgroundColor: theme.cardBg,
+              border: `1px solid ${theme.containerBorder}`,
+              borderRadius: '8px',
+              padding: isFreehand ? '8px' : '10px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              position: 'relative',
+            }}
+          >
+            {!previewMode && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderBottom: `1px solid ${theme.containerBorder}`,
+                  paddingBottom: '6px',
+                  marginBottom: '2px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: theme.textColor }}>
+                    {t('照片拼贴画廊', 'Picture Collage')}
+                  </span>
+                  <div
+                    style={{
+                      display: 'flex',
+                      backgroundColor: 'rgba(0, 0, 0, 0.06)',
+                      borderRadius: '5px',
+                      padding: '2px',
+                      fontSize: '10px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => updateSelf({ layoutMode: 'preset' })}
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        backgroundColor: !isFreehand ? theme.primaryColor : 'transparent',
+                        color: !isFreehand ? theme.headerTextColor : theme.mutedTextColor,
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title="标准规则对齐网格排版"
+                    >
+                      {t('预设网格', 'Preset Grid')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSelf({ layoutMode: 'freehand' })}
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        backgroundColor: isFreehand ? theme.primaryColor : 'transparent',
+                        color: isFreehand ? theme.headerTextColor : theme.mutedTextColor,
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title="自由拖拽、缩放与旋转摆放（任意位置）"
+                    >
+                      {t('自由手绘摆放', 'Freehand Collage')}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={handleAddPhoto}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '3px 8px',
+                      borderRadius: '5px',
+                      backgroundColor: theme.containerBg,
+                      border: `1px solid ${theme.containerBorder}`,
+                      color: theme.textColor,
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                    title="添加一张新照片到拼贴容器"
+                  >
+                    <Plus size={12} />
+                    <span>{t('添加照片', 'Add Photo')}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isFreehand ? (
+              <div
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  height: `${b.containerHeight || 380}px`,
+                  minHeight: '260px',
+                  backgroundColor: !previewMode ? 'rgba(0, 0, 0, 0.02)' : 'transparent',
+                  borderRadius: '6px',
+                  overflow: 'hidden',
+                  border: !previewMode ? `1px dashed ${theme.containerBorder}` : 'none',
+                }}
+              >
+                {b.items.map((item, idx) => {
+                  const fh = item.freehand || { x: 10, y: 10, width: 44, rotation: 0, zIndex: 1 };
+                  return (
+                    <div
+                      key={item.id}
+                      style={{
+                        position: 'absolute',
+                        left: `${fh.x}%`,
+                        top: `${fh.y}%`,
+                        width: `${fh.width}%`,
+                        transform: `rotate(${fh.rotation || 0}deg)`,
+                        zIndex: fh.zIndex || 1,
+                        cursor: !previewMode ? 'grab' : 'default',
+                        userSelect: 'none',
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                        borderRadius: `${b.borderRadius ?? 6}px`,
+                        transition: 'box-shadow 0.15s ease',
+                      }}
+                      onMouseDown={(e) => {
+                        if (previewMode) return;
+                        const target = e.target as HTMLElement;
+                        if (target.closest('button') || target.closest('[data-resize-handle]')) return;
+                        e.stopPropagation();
+
+                        const containerEl = e.currentTarget.parentElement;
+                        if (!containerEl) return;
+                        const containerRect = containerEl.getBoundingClientRect();
+                        const startX = e.clientX;
+                        const startY = e.clientY;
+                        const initialLeftPercent = fh.x;
+                        const initialTopPercent = fh.y;
+
+                        const onMouseMove = (moveEv: MouseEvent) => {
+                          const deltaX = moveEv.clientX - startX;
+                          const deltaY = moveEv.clientY - startY;
+                          const nextX = Math.max(0, Math.min(85, initialLeftPercent + (deltaX / containerRect.width) * 100));
+                          const nextY = Math.max(0, Math.min(85, initialTopPercent + (deltaY / containerRect.height) * 100));
+                          updateItemFreehand(idx, { x: Math.round(nextX), y: Math.round(nextY) });
+                        };
+
+                        const onMouseUp = () => {
+                          window.removeEventListener('mousemove', onMouseMove);
+                          window.removeEventListener('mouseup', onMouseUp);
+                        };
+
+                        window.addEventListener('mousemove', onMouseMove);
+                        window.addEventListener('mouseup', onMouseUp);
+                      }}
+                    >
+                      <ImageSlot
+                        slot={item.image}
+                        rootBlockId={sectionId}
+                        childBlockId={b.id}
+                        shape="rounded"
+                      />
+
+                      {!previewMode && (
+                        <div
+                          data-resize-handle="true"
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            const containerEl = e.currentTarget.closest('[style*="position: relative"]')?.parentElement;
+                            if (!containerEl) return;
+                            const containerRect = containerEl.getBoundingClientRect();
+                            const startX = e.clientX;
+                            const initialWidth = fh.width;
+
+                            const onResizeMove = (moveEv: MouseEvent) => {
+                              const deltaX = moveEv.clientX - startX;
+                              const nextW = Math.max(20, Math.min(95, initialWidth + (deltaX / containerRect.width) * 100));
+                              updateItemFreehand(idx, { width: Math.round(nextW) });
+                            };
+
+                            const onResizeUp = () => {
+                              window.removeEventListener('mousemove', onResizeMove);
+                              window.removeEventListener('mouseup', onResizeUp);
+                            };
+
+                            window.addEventListener('mousemove', onResizeMove);
+                            window.addEventListener('mouseup', onResizeUp);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '-4px',
+                            bottom: '-4px',
+                            width: '14px',
+                            height: '14px',
+                            backgroundColor: theme.primaryColor,
+                            border: '2px solid #ffffff',
+                            borderRadius: '3px',
+                            cursor: 'se-resize',
+                            zIndex: 30,
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                          }}
+                          title="拖拽缩放图片大小"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'grid',
+                  gap: gapPx,
+                  gridTemplateColumns:
+                    b.presetType === '2_split_h'
+                      ? 'repeat(2, minmax(0, 1fr))'
+                      : b.presetType === '3_grid'
+                      ? 'repeat(3, minmax(0, 1fr))'
+                      : b.presetType === '4_grid_2x2'
+                      ? 'repeat(2, minmax(0, 1fr))'
+                      : b.presetType === '6_grid_3x2'
+                      ? 'repeat(3, minmax(0, 1fr))'
+                      : 'repeat(2, minmax(0, 1fr))',
+                  alignItems: 'stretch',
+                }}
+              >
+                {b.items.map((item, idx) => (
+                  <div key={item.id} style={{ position: 'relative' }}>
+                    <ImageSlot
+                      slot={item.image}
+                      rootBlockId={sectionId}
+                      childBlockId={b.id}
+                      shape="rounded"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      case 'table_block': {
+        return (
+          <TableBlockView
+            block={block as TableBlock}
+            sectionId={sectionId}
+            theme={theme}
+            isSelected={isSelected}
+            previewMode={previewMode}
+            updateSelf={updateSelf}
+            t={t}
+          />
+        );
+      }
+
     }
   };
 
@@ -1787,9 +2094,9 @@ const InnerContentBlockView: React.FC<InnerBlockProps> = ({
         position: 'relative',
         borderRadius: '6px',
         padding: '4px',
-        outline: isSelected ? '2px solid #2563eb' : '1px solid transparent',
-        backgroundColor: isSelected ? 'rgba(37, 99, 235, 0.03)' : 'transparent',
-        borderTop: isDragOverTop ? '3px solid #2563eb' : undefined,
+        outline: isSelected ? '1px solid #3b82f6' : '1px solid transparent',
+        backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.02)' : 'transparent',
+        borderTop: isDragOverTop ? '2px solid #3b82f6' : undefined,
         transition: 'outline-color 0.12s ease',
       }}
       className={!previewMode ? 'group/innerblk hover:outline-zinc-400/70' : ''}
@@ -1869,7 +2176,15 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
   const [dragOverContainerEndId, setDragOverContainerEndId] = useState<string | null>(
     null
   );
-  const [contentHeight, setContentHeight] = useState<number>(0);
+    const [remoteCursors, setRemoteCursors] = useState<RemoteCursor[]>([]);
+
+  useEffect(() => {
+    const unsub = collaborationService.onRemoteCursor((cursors) => {
+      setRemoteCursors(cursors);
+    });
+    return unsub;
+  }, []);
+const [contentHeight, setContentHeight] = useState<number>(0);
   const internalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -1944,10 +2259,10 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
         }}
         style={{
           position: 'relative',
-          outline: isRootSelected ? '2px solid #18181b' : 'none',
+          outline: isRootSelected ? '1px solid #3b82f6' : 'none',
           outlineOffset: '-1px',
           borderTop:
-            dragOverRootIdx === rootIndex ? '4px solid #2563eb' : undefined,
+            dragOverRootIdx === rootIndex ? '3px solid #3b82f6' : undefined,
         }}
         className={`animate-container-enter transition-all duration-300 ease-out ${
           !previewMode ? 'group/rootblk' : ''
@@ -3047,14 +3362,12 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
         display: 'flex',
         justifyContent: 'center',
         flexShrink: 0,
-        transition: 'width 0.12s ease, height 0.12s ease',
       }}
     >
       <div
         style={{
           transform: `scale(${scale})`,
           transformOrigin: 'top center',
-          transition: 'transform 0.12s ease',
           width: `${doc.canvasWidth}px`,
           position: 'absolute',
           top: 0,
@@ -3063,6 +3376,16 @@ export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ exportRef }) => 
         }}
       >
         <div
+          onPointerMove={(e) => {
+            if (!internalRef.current) return;
+            const rect = internalRef.current.getBoundingClientRect();
+            const x = Math.round(e.clientX - rect.left);
+            const y = Math.round(e.clientY - rect.top);
+            collaborationService.sendCursor(x, y);
+          }}
+          onPointerLeave={() => {
+            collaborationService.sendCursor(-9999, -9999);
+          }}
           ref={(node) => {
             internalRef.current = node;
             if (exportRef) {

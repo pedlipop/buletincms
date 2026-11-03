@@ -9,9 +9,12 @@ import {
   LayoutTemplate,
   Plus,
   SquareDashed,
+  Table as TableIcon,
 } from 'lucide-react';
 import {
   createBlankContainer,
+  createCollageContainer,
+  createTableContainer,
   createSectionContainer,
 } from '../data/presets';
 import { DragPayload, useBulletinStore } from '../store/useBulletinStore';
@@ -182,6 +185,44 @@ export const FloatingContainerBar: React.FC<FloatingContainerBarProps> = ({
           <div className="flex flex-col text-left">
             <span className="font-bold text-[11px] leading-tight text-zinc-200 group-hover:text-white">
               {t('极简框架', 'Header Box')}
+            </span>
+          </div>
+        </button>
+
+        {/* Option 4: Photo Collage Container */}
+        <button
+          type="button"
+          onClick={() => insertRootBlock(createCollageContainer())}
+          {...bindDrag({
+            source: 'library_root',
+            rootFactory: 'collage_container',
+          })}
+          className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 active:bg-zinc-700 border border-amber-500/30 hover:border-amber-400 text-zinc-200 hover:text-white transition-all active:scale-95 cursor-grab active:cursor-grabbing shadow-xs"
+          title={t('点击插入或拖拽到画布：照片拼贴容器 (自由拖拽/预设网格)', 'Click to add or drag: Photo Collage Container')}
+        >
+          <LayoutGrid size={14} className="text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+          <div className="flex flex-col text-left">
+            <span className="font-bold text-[11px] leading-tight text-amber-300 group-hover:text-white">
+              {t('照片拼贴', 'Collage')}
+            </span>
+          </div>
+        </button>
+
+        {/* Option 5: Data Table Container */}
+        <button
+          type="button"
+          onClick={() => insertRootBlock(createTableContainer())}
+          {...bindDrag({
+            source: 'library_root',
+            rootFactory: 'table_container',
+          })}
+          className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 active:bg-zinc-700 border border-emerald-500/30 hover:border-emerald-400 text-zinc-200 hover:text-white transition-all active:scale-95 cursor-grab active:cursor-grabbing shadow-xs"
+          title={t('点击插入或拖拽到画布：数据统计表格 (四周线条可控)', 'Click to add or drag: Data Table Container')}
+        >
+          <TableIcon size={14} className="text-emerald-400 group-hover:scale-110 transition-transform shrink-0" />
+          <div className="flex flex-col text-left">
+            <span className="font-bold text-[11px] leading-tight text-emerald-300 group-hover:text-white">
+              {t('数据表格', 'Table')}
             </span>
           </div>
         </button>

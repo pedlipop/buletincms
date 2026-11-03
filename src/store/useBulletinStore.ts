@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { collaborationService } from '../services/collaboration';
 import {
   BulletinDocument,
   ContentBlock,
@@ -12,6 +13,8 @@ import {
 } from '../types/bulletin';
 import {
   createBlankContainer,
+  createCollageContainer,
+  createTableContainer,
   createContentBlock,
   createDefaultGreyBulletin,
   createFooterBannerBlock,
@@ -158,6 +161,11 @@ export function findImageSlotContext(
           if (cb.leftCard?.image?.id === slotId) return { slot: cb.leftCard.image, rootBlock: rb, childBlock: cb };
           if (cb.rightCard?.image?.id === slotId) return { slot: cb.rightCard.image, rootBlock: rb, childBlock: cb };
         }
+        if (cb.type === 'picture_collage') {
+          for (const it of cb.items) {
+            if (it.image?.id === slotId) return { slot: it.image, rootBlock: rb, childBlock: cb };
+          }
+        }
         if (cb.type === 'custom_columns_block') {
           for (const it of cb.items) {
             if (it.image?.id === slotId) return { slot: it.image, rootBlock: rb, childBlock: cb };
@@ -182,7 +190,7 @@ export type DragPayload =
     }
   | {
       source: 'library_root';
-      rootFactory: 'numbered_section' | 'blank_container' | 'simple_header_section' | 'masthead' | 'highlights_bar' | 'footer_banner';
+      rootFactory: 'numbered_section' | 'blank_container' | 'simple_header_section' | 'collage_container' | 'table_container' | 'masthead' | 'highlights_bar' | 'footer_banner';
     }
   | {
       source: 'library_child';
@@ -246,6 +254,7 @@ interface BulletinState {
   ) => void;
   applyAllGreyWireframeTheme: () => void;
   applySampleColorPalettes: () => void;
+  applyRemoteDocUpdate: (doc: BulletinDocument) => void;
   undo: () => void;
   redo: () => void;
 
@@ -472,6 +481,11 @@ export const sanitizeDocForProduction = (doc: BulletinDocument): BulletinDocumen
           if (cb.leftCard?.image?.url?.startsWith('/demo/')) cb.leftCard.image.url = null;
           if (cb.rightCard?.image?.url?.startsWith('/demo/')) cb.rightCard.image.url = null;
         }
+        if (cb.type === 'picture_collage') {
+          cb.items?.forEach((item) => {
+            if (item.image?.url?.startsWith('/demo/')) item.image.url = null;
+          });
+        }
       });
     }
     if (rb.type === 'highlights_bar') {
@@ -597,6 +611,7 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
       past: nextPast,
       future: [],
     });
+    collaborationService.sendDocUpdate(nextDoc);
   };
 
   const materializeRootFromLibrary = (
@@ -625,6 +640,10 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
         );
       case 'blank_container':
         return createBlankContainer('freeform_asset_block');
+      case 'collage_container':
+        return createCollageContainer();
+      case 'table_container':
+        return createTableContainer();
       case 'masthead':
         return createMastheadBlock();
       case 'highlights_bar':
@@ -745,6 +764,17 @@ export const useBulletinStore = create<BulletinState>((set, get) => {
         ...patch,
         updatedAt: new Date().toISOString(),
       });
+    },
+
+    applyRemoteDocUpdate: (remoteDoc) => {
+      const state = get();
+      const sanitized = sanitizeDocForProduction(remoteDoc);
+      const nextDocs = state.documents.map((d) => (d.id === sanitized.id ? sanitized : d));
+      if (!nextDocs.some((d) => d.id === sanitized.id)) {
+        nextDocs.unshift(sanitized);
+      }
+      persistState(nextDocs, state.activeDocId, state.savedTemplates);
+      set({ documents: nextDocs });
     },
 
     applyAllGreyWireframeTheme: () => {
