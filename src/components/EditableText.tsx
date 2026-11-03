@@ -7,9 +7,12 @@ import {
   AlignRight,
   Bold,
   Eraser,
+  GripVertical,
   Highlighter,
   Indent,
   Italic,
+  Maximize2,
+  Minimize2,
   MoveVertical,
   Palette,
   Strikethrough,
@@ -110,6 +113,11 @@ export const EditableText: React.FC<EditableTextProps> = ({
     left: number;
     placeBelow: boolean;
   } | null>(null);
+  const [customToolbarPos, setCustomToolbarPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [currentFontSize, setCurrentFontSize] = useState<number>(12);
   const [currentTextIndent, setCurrentTextIndent] = useState<string>('0px');
   const [currentPaddingLeft, setCurrentPaddingLeft] = useState<string>('0px');
@@ -228,6 +236,35 @@ export const EditableText: React.FC<EditableTextProps> = ({
     updateToolbarPosition();
   }, [onChange, saveSelection, updateToolbarPosition, value]);
 
+  const handleDragToolbar = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialRect = toolbarRef.current?.getBoundingClientRect();
+    if (!initialRect) return;
+    const startLeft = initialRect.left;
+    const startTop = initialRect.top;
+
+    const onMove = (moveEv: MouseEvent) => {
+      moveEv.preventDefault();
+      const dx = moveEv.clientX - startX;
+      const dy = moveEv.clientY - startY;
+      const toolbarW = toolbarRef.current?.offsetWidth || initialRect.width;
+      const toolbarH = toolbarRef.current?.offsetHeight || initialRect.height;
+      setCustomToolbarPos({
+        left: Math.max(8, Math.min(window.innerWidth - toolbarW - 8, startLeft + dx)),
+        top: Math.max(8, Math.min(window.innerHeight - toolbarH - 8, startTop + dy)),
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   useEffect(() => {
     if (!isFocused) {
       setActivePopover(null);
@@ -256,6 +293,7 @@ export const EditableText: React.FC<EditableTextProps> = ({
       ) {
         setIsFocused(false);
         setActivePopover(null);
+        setCustomToolbarPos(null);
       }
     };
 
@@ -442,6 +480,7 @@ export const EditableText: React.FC<EditableTextProps> = ({
             ) {
               setIsFocused(false);
               setActivePopover(null);
+              setCustomToolbarPos(null);
             }
           }, 150);
         }}
@@ -470,31 +509,85 @@ export const EditableText: React.FC<EditableTextProps> = ({
       {isFocused &&
         toolbarPos &&
         typeof document !== 'undefined' &&
-        createPortal(
-          <div
-            ref={toolbarRef}
-            onMouseDown={(e) => {
-              // Prevent focus loss on contentEditable unless clicking native select/color input
-              const tag = (e.target as HTMLElement).tagName;
-              if (tag !== 'SELECT' && tag !== 'INPUT') {
-                e.preventDefault();
-              }
-              e.stopPropagation();
-            }}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: 'fixed',
-              top: `${toolbarPos.top}px`,
-              left: `${toolbarPos.left}px`,
-              transform: toolbarPos.placeBelow
-                ? 'translate(-50%, 0)'
-                : 'translate(-50%, -100%)',
-              zIndex: 9999,
-            }}
-            className="bg-zinc-900/95 backdrop-blur-md border border-zinc-700 text-zinc-100 rounded-lg shadow-[0_8px_28px_rgba(0,0,0,0.45)] px-2 py-1.5 flex items-center flex-wrap gap-1 select-none max-w-[calc(100vw-24px)]"
-          >
-            {/* 1. Font Size Controls (A- | Size Select | A+) */}
-            <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded px-1 py-0.5 gap-0.5">
+        (() => {
+          const isPlaceBelow = customToolbarPos
+            ? customToolbarPos.top < 220
+            : toolbarPos.placeBelow;
+          const effectiveTop = customToolbarPos
+            ? customToolbarPos.top
+            : toolbarPos.top;
+          const effectiveLeft = customToolbarPos
+            ? customToolbarPos.left
+            : toolbarPos.left;
+          const effectiveTransform = customToolbarPos
+            ? 'none'
+            : toolbarPos.placeBelow
+            ? 'translate(-50%, 0)'
+            : 'translate(-50%, -100%)';
+
+          return createPortal(
+            <div
+              ref={toolbarRef}
+              onMouseDown={(e) => {
+                // Prevent focus loss on contentEditable unless clicking native select/color input
+                const tag = (e.target as HTMLElement).tagName;
+                if (tag !== 'SELECT' && tag !== 'INPUT') {
+                  e.preventDefault();
+                }
+                e.stopPropagation();
+              }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'fixed',
+                top: `${effectiveTop}px`,
+                left: `${effectiveLeft}px`,
+                transform: effectiveTransform,
+                zIndex: 9999,
+              }}
+              className="bg-zinc-900/95 backdrop-blur-md border border-zinc-700 text-zinc-100 rounded-lg shadow-[0_8px_28px_rgba(0,0,0,0.45)] px-2 py-1.5 flex items-center gap-1 select-none max-w-[calc(100vw-24px)] transition-[padding] duration-150"
+            >
+              {/* Left Drag Handle */}
+              <div
+                onMouseDown={handleDragToolbar}
+                onDoubleClick={() => setCustomToolbarPos(null)}
+                title={t('按住拖拽工具栏位置 (双击恢复自动对齐)', 'Drag to move toolbar (Double-click to reset)')}
+                className="cursor-grab active:cursor-grabbing p-1 -ml-0.5 text-zinc-500 hover:text-zinc-200 transition-colors flex items-center justify-center shrink-0 rounded hover:bg-zinc-800"
+              >
+                <GripVertical size={13} />
+              </div>
+
+              {isCollapsed ? (
+                /* Compact / Collapsed view */
+                <div className="flex items-center gap-1.5 pl-0.5">
+                  <span className="font-mono text-[11px] font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 select-none">
+                    {currentFontSize}px
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => applyExecCommand('bold')}
+                    title={t('加粗 (Bold)', 'Bold')}
+                    className="p-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors text-xs font-bold"
+                  >
+                    <Bold size={12} />
+                  </button>
+                  <div className="w-[1px] h-3.5 bg-zinc-700/80 mx-0.5 shrink-0" />
+                  <button
+                    type="button"
+                    onClick={() => setIsCollapsed(false)}
+                    title={t('展开完整工具栏 (Expand)', 'Expand Toolbar')}
+                    className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-blue-400 transition-colors flex items-center gap-1 text-[10px] font-semibold shrink-0"
+                  >
+                    <Maximize2 size={12} />
+                    <span>{t('展开', 'Expand')}</span>
+                  </button>
+                </div>
+              ) : (
+                /* Full Expanded view */
+                <>
+                  <div className="w-[1px] h-4 bg-zinc-700/80 mr-0.5 shrink-0" />
+
+                  {/* 1. Font Size Controls (A- | Size Select | A+) */}
+                  <div className="flex items-center bg-zinc-950 border border-zinc-800 rounded px-1 py-0.5 gap-0.5 shrink-0">
               <button
                 type="button"
                 onClick={() => applyFontSizePx(currentFontSize - 1)}
@@ -588,12 +681,12 @@ export const EditableText: React.FC<EditableTextProps> = ({
                 <div
                   style={{
                     position: 'absolute',
-                    top: toolbarPos.placeBelow ? '100%' : undefined,
-                    bottom: toolbarPos.placeBelow ? undefined : '100%',
+                    top: isPlaceBelow ? '100%' : undefined,
+                    bottom: isPlaceBelow ? undefined : '100%',
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    marginTop: toolbarPos.placeBelow ? '6px' : undefined,
-                    marginBottom: toolbarPos.placeBelow ? undefined : '6px',
+                    marginTop: isPlaceBelow ? '6px' : undefined,
+                    marginBottom: isPlaceBelow ? undefined : '6px',
                   }}
                   className="bg-zinc-900 border border-zinc-700 rounded-lg p-2 shadow-xl flex items-center gap-1.5 z-50"
                 >
@@ -644,12 +737,12 @@ export const EditableText: React.FC<EditableTextProps> = ({
                 <div
                   style={{
                     position: 'absolute',
-                    top: toolbarPos.placeBelow ? '100%' : undefined,
-                    bottom: toolbarPos.placeBelow ? undefined : '100%',
+                    top: isPlaceBelow ? '100%' : undefined,
+                    bottom: isPlaceBelow ? undefined : '100%',
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    marginTop: toolbarPos.placeBelow ? '6px' : undefined,
-                    marginBottom: toolbarPos.placeBelow ? undefined : '6px',
+                    marginTop: isPlaceBelow ? '6px' : undefined,
+                    marginBottom: isPlaceBelow ? undefined : '6px',
                   }}
                   className="bg-zinc-900 border border-zinc-700 rounded-lg p-2 shadow-xl flex items-center gap-1.5 z-50"
                 >
@@ -759,11 +852,11 @@ export const EditableText: React.FC<EditableTextProps> = ({
                 <div
                   style={{
                     position: 'absolute',
-                    top: toolbarPos.placeBelow ? '100%' : undefined,
-                    bottom: toolbarPos.placeBelow ? undefined : '100%',
+                    top: isPlaceBelow ? '100%' : undefined,
+                    bottom: isPlaceBelow ? undefined : '100%',
                     right: 0,
-                    marginTop: toolbarPos.placeBelow ? '6px' : undefined,
-                    marginBottom: toolbarPos.placeBelow ? undefined : '6px',
+                    marginTop: isPlaceBelow ? '6px' : undefined,
+                    marginBottom: isPlaceBelow ? undefined : '6px',
                   }}
                   className="bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 shadow-2xl flex flex-col gap-2 z-50 w-[235px]"
                 >
@@ -867,20 +960,38 @@ export const EditableText: React.FC<EditableTextProps> = ({
               )}
             </div>
 
-            <div className="w-[1px] h-4 bg-zinc-700/80 mx-0.5" />
+            <div className="w-[1px] h-4 bg-zinc-700/80 mx-0.5 shrink-0" />
 
             {/* 8. Clear Formatting */}
             <button
               type="button"
               onClick={handleClearFormatting}
               title={t('清除文字格式', 'Clear Formatting')}
-              className="p-1.5 rounded hover:bg-red-950/80 text-zinc-400 hover:text-red-300 transition-colors"
+              className="p-1.5 rounded hover:bg-red-950/80 text-zinc-400 hover:text-red-300 transition-colors shrink-0"
             >
               <Eraser size={13} />
             </button>
-          </div>,
-          document.body
+
+            <div className="w-[1px] h-4 bg-zinc-700/80 mx-0.5 shrink-0" />
+
+            {/* 9. Collapse Button at right to make it compact */}
+            <button
+              type="button"
+              onClick={() => {
+                setActivePopover(null);
+                setIsCollapsed(true);
+              }}
+              title={t('折叠为紧凑悬浮条 (Collapse)', 'Collapse to Compact')}
+              className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors shrink-0"
+            >
+              <Minimize2 size={13} />
+            </button>
+          </>
         )}
+      </div>,
+      document.body
+    );
+  })()}
     </>
   );
 };
